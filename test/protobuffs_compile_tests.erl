@@ -12,22 +12,34 @@
 -include_lib("proper/include/proper.hrl").
 
 -include_lib("eunit/include/eunit.hrl").
+ 
+%proper_specs_test() ->
+%    ?assertEqual([],
+%		 (proper:check_specs(protobuffs_compile, [long_result]))).
+
+proper_lib_specs_test() ->
+    ?assertEqual([],
+		 (proper:check_specs(protobuffs_compile_lib, [long_result]))).
+
+proper_module_test() ->
+    ?assertEqual([],
+		  proper:module(?MODULE, [long_result])).
 
 setup() ->
-    Modules = [protobuffs_file],
+    Modules = [protobuffs_io],
     meck:new(Modules),
-    meck:expect(protobuffs_file, open,
+    meck:expect(protobuffs_io, open,
 		fun (_, _) -> {ok, in_file} end),
-    meck:expect(protobuffs_file, close, fun (_) -> ok end),
-    meck:expect(protobuffs_file, request,
+    meck:expect(protobuffs_io, close, fun (_) -> ok end),
+    meck:expect(protobuffs_io, request,
 		fun (_) -> {eof, dummy} end),
-    meck:expect(protobuffs_file, compile_forms,
+    meck:expect(protobuffs_io, compile_forms,
 		fun (_, _) -> {ok, dummy, <<"Bytest">>, dummy} end),
-    meck:expect(protobuffs_file, write_file,
+    meck:expect(protobuffs_io, write_file,
 		fun (_, _) -> ok end),
-    meck:expect(protobuffs_file, format,
+    meck:expect(protobuffs_io, format,
 		fun (_, _, _) -> ok end),
-    meck:expect(protobuffs_file, path_open,
+    meck:expect(protobuffs_io, path_open,
 		fun (Path, FileName, _) ->
 			{ok, io_device, filename:join([Path, FileName])}
 		end),
@@ -57,11 +69,14 @@ generate_source_test_() ->
 parse_imports_test_() ->
     {foreach, fun setup/0, fun cleanup/1,
      [?_assertMatch([],
-		    (protobuffs_compile:parse_imports([], dummy_path))),
+		    (protobuffs_compile_lib:parse_imports([], dummy_path))),
       ?_assertMatch([{import, dummy_import_file}],
-		    (protobuffs_compile:parse_imports([{import,
-							dummy_import_file}],
-						      "dummy_path"))),
+		    (protobuffs_compile_lib:parse_imports([{import,
+							    dummy_import_file}],
+							  "dummy_path"))),
       ?_assertMatch([what_ever],
-		    (protobuffs_compile:parse_imports([what_ever],
-						      dummy_path)))]}.
+		    (protobuffs_compile_lib:parse_imports([what_ever],
+							  dummy_path)))]}.
+
+parse_string_test_() ->
+    [?_assertMatch({ok,[]},protobuffs_compile_lib:parse_string(""))].
