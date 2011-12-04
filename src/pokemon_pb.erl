@@ -28,7 +28,7 @@
     set_extension/3]).
 -export([decode_extensions/1]).
 -export([encode/1]).
--record(pikachu, {abc, def, '$extensions' = dict:new()}).
+-record(pikachu, {abc, '$extensions' = dict:new()}).
 
 %% ENCODE
 encode(Record) ->

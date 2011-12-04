@@ -26,8 +26,8 @@ filter_forms(Msgs, Enums, [{attribute,L,export,[{encode_pikachu,1},{decode_pikac
     Exports = lists:foldl(fun filter_export_decode_encode/2, [], Msgs),
     filter_forms(Msgs, Enums, Tail, Basename, [{attribute,L,export,Exports}|Acc]);
 
-filter_forms(Msgs, Enums, [{attribute,L,record,{pikachu,_}}|Tail], Basename, Acc) ->
-    Records = [filter_record(Extends, Fields, L, Name) || {Name, Fields,Extends} <- Msgs],
+filter_forms(Msgs, Enums, [{attribute,L,record,{pikachu,_}}=RecordTemplate|Tail], Basename, Acc) ->
+    Records = [filter_record(Extends, Fields, L, Name, RecordTemplate) || {Name, Fields,Extends} <- Msgs],
     filter_forms(Msgs, Enums, Tail, Basename, Records ++ Acc);
 
 filter_forms(Msgs, Enums, [{function,L,encode_pikachu,1,[Clause]}|Tail], Basename, Acc) ->
@@ -161,13 +161,13 @@ filter_export_decode_encode({Name, _, _}, Acc) ->
     [{list_to_atom("encode_" ++ string:to_lower(Name)), 1},
      {list_to_atom("decode_" ++ string:to_lower(Name)), 1} | Acc].
 
-filter_record(Extends,Fields,L,Name) ->		   
+filter_record(Extends,Fields,L,Name,{attribute, L, record, {pikachu, [FieldTemplate|Extend]}}) ->
     OutFields = [string:to_lower(A) || {_, _, _, A, _} <- lists:keysort(1, Fields)],		   
     ExtendField = case Extends of
 		      disallowed -> [];
-		      _ -> [{record_field,L,{atom,L,'$extensions'}}]
-		  end,		   
-    Frm_Fields = [{record_field,L,{atom,L,list_to_atom(OutField)}} || OutField <- OutFields] ++ ExtendField, 
+		      _ -> Extend
+		  end,
+    Frm_Fields = [replace_atom(FieldTemplate,abc,list_to_atom(OutField)) || OutField <- OutFields] ++ ExtendField, 
     {attribute, L, record, {atomize(Name), Frm_Fields}}.
 
 -spec filter_set_extension(list(),_,maybe_improper_list()) -> maybe_improper_list().

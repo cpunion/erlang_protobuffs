@@ -47,7 +47,8 @@ filter_forms_test_() ->
      test_function_decode_extentions(),
      test_function_extensions_size(),
      test_function_has_extension(),
-     test_function_get_extension()].
+     test_function_get_extension(),
+     test_function_set_extension()].
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%% SETUP FUNCTIONS %%%
@@ -111,27 +112,56 @@ test_filter_attribute_export() ->
 test_filter_attribute_record() ->
     Name = "name",
     Fields = [{1,optional,"int32","field1",none}],
-    Extends = ignored,
-    Messages = [{Name,Fields,Extends}],
+    Messages1 = [{Name,Fields,ignored}],
+    Messages2 = [{Name,Fields,disallowed}],
     Basename = ignored,
     Enums = ignored,
 
     Acc = [],
 
+    RecordFmt = "-record(~s, {~s ~s}).",
+	
+    TemplateFunction = string_format(RecordFmt,["pikachu",
+						"abc",
+						", '$extensions' = dict:new()"]),
+    ExpectedFunction1 = string_format(RecordFmt,[Name,
+						"field1",
+						", '$extensions' = dict:new()"]),
+    ExpectedFunction2 = string_format(RecordFmt,[Name,
+						"field1",
+						""]),
+
+    {ok,Function} = parse(TemplateFunction),
+    {ok,FilterdFunction1} = parse(ExpectedFunction1),
+    {ok,FilterdFunction2} = parse(ExpectedFunction2),
+    
+    [?_assertEqual([FilterdFunction1],
+		   protobuffs_compile_lib:filter_forms(Messages1, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction2],
+		   protobuffs_compile_lib:filter_forms(Messages2, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
     %%TODO: "def" is unused
     %%TODO: "=dict:new()" removed
-    Template = "-record(pikachu, {abc, def,'$extensions' = dict:new()}).", 
-    ExpectedRow = "-record(name, {field1, '$extensions'}).",
+    %% Template = "-record(pikachu, {abc, def,'$extensions' = dict:new()}).", 
+    %% ExpectedRow = "-record(name, {field1, '$extensions'}).",
 
-    {ok,Attribute} = parse(Template),
-    {ok,Expected} = parse(ExpectedRow),
+    %% {ok,Attribute} = parse(Template),
+    %% {ok,Expected} = parse(ExpectedRow),
 
-    [?_assertEqual([Expected],
-     		   protobuffs_compile_lib:filter_forms(Messages, 
-     						       Enums, 
-     						       [Attribute],
-     						       Basename,
-     						       Acc))].
+    %% [?_assertEqual([Expected],
+    %%  		   protobuffs_compile_lib:filter_forms(Messages, 
+    %%  						       Enums, 
+    %%  						       [Attribute],
+    %%  						       Basename,
+    %%  						       Acc))].
 
 test_filter_function_encode1() ->
     Messages = ignored,
@@ -524,13 +554,6 @@ test_function_get_extension() ->
 
     {ok,Function} = parse(TemplateFunction),
     {ok,FilterdFunction} = parse(ExpectedFunction),
-
-    ?debugFmt("~n~w~n",[protobuffs_compile_lib:filter_forms(Messages, 
-							    [], 
-							    [Function],
-							    Basename,
-							    Acc)]),
-    ?debugFmt("~n~w~n",[[FilterdFunction]]),
     
     [?_assertEqual([FilterdFunction],
     		   protobuffs_compile_lib:filter_forms(Messages, 
@@ -539,6 +562,35 @@ test_function_get_extension() ->
     						       Basename,
     						       Acc))].
     
+test_function_set_extension() ->
+    Name = "name",
+    Fields = [],
+    Extends = [],
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Enums = [],
+    Acc = [],
+
+    SetExtensionFmt1 = "set_extension(#~s{'$extensions' = Extensions} = Record, "
+	"fieldname, Value) ->"
+	"NewExtends = dict:store(1, {rule, Value, type, []}, Extensions),"
+	"{ok, Record#~s{'$extensions' = NewExtends}};",
+    SetExtensionFmt2 = "set_extension(Record, _, _) ->"
+	"{error, Record}.",
+	
+    TemplateFunction = string_format(SetExtensionFmt1 ++ SetExtensionFmt2,["pikachu","pikachu"]),
+    ExpectedFunction = string_format(SetExtensionFmt2,[]),
+
+    {ok,Function} = parse(TemplateFunction),
+    {ok,FilterdFunction} = parse(ExpectedFunction),
+
+    [?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%%
