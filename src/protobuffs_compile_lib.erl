@@ -203,10 +203,10 @@ filter_set_extension([{MsgName,_,Extends}|Tail],Clause,Acc) ->
 				   DictStore,
 				   [{integer,L2,Id},
 				    {tuple,L2,
-				     [erl_parse:abstract(Rule),
+				     [set_line_number(L2,erl_parse:abstract(Rule)),
 				      ValueArg,
-				      erl_parse:abstract(Type),
-				      erl_parse:abstract(Opts)]
+				      set_line_number(L2,erl_parse:abstract(Type)),
+				      set_line_number(L2,erl_parse:abstract(Opts))]
 				    },
 				    StoreVar
 				   ]

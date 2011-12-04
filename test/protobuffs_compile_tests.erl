@@ -148,21 +148,6 @@ test_filter_attribute_record() ->
     						       Basename,
     						       Acc))].
 
-    %%TODO: "def" is unused
-    %%TODO: "=dict:new()" removed
-    %% Template = "-record(pikachu, {abc, def,'$extensions' = dict:new()}).", 
-    %% ExpectedRow = "-record(name, {field1, '$extensions'}).",
-
-    %% {ok,Attribute} = parse(Template),
-    %% {ok,Expected} = parse(ExpectedRow),
-
-    %% [?_assertEqual([Expected],
-    %%  		   protobuffs_compile_lib:filter_forms(Messages, 
-    %%  						       Enums, 
-    %%  						       [Attribute],
-    %%  						       Basename,
-    %%  						       Acc))].
-
 test_filter_function_encode1() ->
     Messages = ignored,
     Enums = ignored,
@@ -536,19 +521,19 @@ test_function_get_extension() ->
     Acc = [],
 
     GetExtensionFmt1 = "get_extension(Record, fieldatom) when is_record(Record, ~s) ->"
-	++ " get_extension(Record, 1);",
+	" get_extension(Record, 1);",
     GetExtensionFmt2 = " get_extension(#~s{'$extensions' = Extensions}, Int)"
-	++ " when is_integer(Int) ->"
-	++ " case dict:find(Int, Extensions) of"
-	++ " {ok, {_Rule, Value, _Type, _Opts}} ->"
-	++ " {ok, Value};"
-	++ " {ok, Binary} ->"
-	++ " {raw, Binary};"
-	++ " error ->"
-	++ " undefined"
-	++ " end;"
-	++ " get_extension(_Record, _FieldName) ->"
-	++ " undefined.",
+	" when is_integer(Int) ->"
+	" case dict:find(Int, Extensions) of"
+	" {ok, {_Rule, Value, _Type, _Opts}} ->"
+	" {ok, Value};"
+	" {ok, Binary} ->"
+	" {raw, Binary};"
+	" error ->"
+	" undefined"
+	" end;"
+	" get_extension(_Record, _FieldName) ->"
+	" undefined.",
     TemplateFunction = string_format(GetExtensionFmt1++GetExtensionFmt2,["pikachu","pikachu"]),
     ExpectedFunction = string_format(GetExtensionFmt2,["name"]),
 
@@ -565,27 +550,52 @@ test_function_get_extension() ->
 test_function_set_extension() ->
     Name = "name",
     Fields = [],
-    Extends = [],
-    Messages = [{Name,Fields,Extends}],
+    Extends = [{1, rule, "int32", "field1", []}],
+    Messages1 = [{Name,Fields,[]}],
+    Messages2 = [{Name,Fields,disallowed}],
+    Messages3 = [{Name,Fields,Extends}],
     Basename = ignored,
     Enums = [],
     Acc = [],
 
     SetExtensionFmt1 = "set_extension(#~s{'$extensions' = Extensions} = Record, "
-	"fieldname, Value) ->"
-	"NewExtends = dict:store(1, {rule, Value, type, []}, Extensions),"
+	"~s, Value) ->"
+	"NewExtends = dict:store(1, {rule, Value, ~s, []}, Extensions),"
 	"{ok, Record#~s{'$extensions' = NewExtends}};",
     SetExtensionFmt2 = "set_extension(Record, _, _) ->"
 	"{error, Record}.",
 	
-    TemplateFunction = string_format(SetExtensionFmt1 ++ SetExtensionFmt2,["pikachu","pikachu"]),
-    ExpectedFunction = string_format(SetExtensionFmt2,[]),
+    TemplateFunction = string_format(SetExtensionFmt1 ++ SetExtensionFmt2,["pikachu","fieldname","type","pikachu"]),
+    ExpectedFunction1 = string_format(SetExtensionFmt2,[]),
+    ExpectedFunction2 = string_format(SetExtensionFmt2,[]),
+    ExpectedFunction3 = string_format(SetExtensionFmt1 ++ SetExtensionFmt2,[Name,"field1","int32",Name]),
 
     {ok,Function} = parse(TemplateFunction),
-    {ok,FilterdFunction} = parse(ExpectedFunction),
+    {ok,FilterdFunction1} = parse(ExpectedFunction1),
+    {ok,FilterdFunction2} = parse(ExpectedFunction2),
+    {ok,FilterdFunction3} = parse(ExpectedFunction3),
 
-    [?_assertEqual([FilterdFunction],
-    		   protobuffs_compile_lib:filter_forms(Messages, 
+    ?debugFmt("~n~w~n",[[FilterdFunction3]]),
+    ?debugFmt("~n~w~n",[protobuffs_compile_lib:filter_forms(Messages3, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)]),
+
+    [?_assertEqual([FilterdFunction1],
+    		   protobuffs_compile_lib:filter_forms(Messages1, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction2],
+    		   protobuffs_compile_lib:filter_forms(Messages2, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction3],
+    		   protobuffs_compile_lib:filter_forms(Messages3, 
     						       [], 
     						       [Function],
     						       Basename,
