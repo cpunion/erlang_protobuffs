@@ -34,9 +34,6 @@
 encode(Record) ->
     encode(element(1, Record), Record).
 
-encode_pikachu(Record) when is_record(Record, pikachu) ->
-    encode(pikachu, Record).
-
 encode(pikachu, Record) ->
     iolist_to_binary(iolist(pikachu, Record) ++ encode_extensions(Record)).
 
@@ -44,6 +41,9 @@ encode_extensions(#pikachu{'$extensions' = Extends}) ->
     [pack(Key, Optionalness, Data, Type, Accer) ||
         {Key, {Optionalness, Data, Type, Accer}} <- dict:to_list(Extends)];
 encode_extensions(_) -> [].
+
+encode_pikachu(Record) when is_record(Record, pikachu) ->
+    encode(pikachu, Record).
 
 iolist(pikachu, Record) ->
     [pack(1, required, with_default(Record#pikachu.abc, none), string, [])].
@@ -94,12 +94,12 @@ int_to_enum(_,Val) ->
 %% DECODE
 decode_pikachu(Bytes) when is_binary(Bytes) ->
     decode(pikachu, Bytes).
-    
+
 decode(pikachu, Bytes) when is_binary(Bytes) ->
-    Types = [{1, abc, int32, []}, {2, def, double, []}],
-    Defaults = [],
-    Decoded = decode(Bytes, Types, Defaults),
-    to_record(pikachu, Decoded).
+        Types = [{1, field, int32, []}],
+        Defaults = [{false, '$extensions', dict:new()}],
+        Decoded = decode(Bytes, Types, Defaults),
+        to_record(pikachu, Decoded).
     
 decode(<<>>, _, Acc) -> Acc;
 decode(Bytes, Types, Acc) ->
@@ -211,11 +211,15 @@ set_record_field(Fields, Record, Field, Value) ->
     Index = list_index(Field, Fields),
     erlang:setelement(Index+1, Record, Value).
     
-list_index(Target, List) -> list_index(Target, List, 1).
+list_index(Target, List) -> 
+    list_index(Target, List, 1).
 
-list_index(Target, [Target|_], Index) -> Index;
-list_index(Target, [_|Tail], Index) -> list_index(Target, Tail, Index+1);
-list_index(_, [], _) -> 0.
+list_index(Target, [Target|_], Index) -> 
+    Index;
+list_index(Target, [_|Tail], Index) -> 
+    list_index(Target, Tail, Index+1);
+list_index(_, [], _) -> 
+    0.
 
 extension_size(#pikachu{'$extensions' = Extensions}) ->
     dict:size(Extensions);

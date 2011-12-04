@@ -2,4 +2,5 @@
 {incl_mods,
     [protobuffs,
      protobuffs_compile,
-     protobuffs_file]}.
+     protobuffs_compile_lib,
+     protobuffs_io]}.

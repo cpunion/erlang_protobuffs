@@ -61,7 +61,7 @@ compare(A, B) when is_float(A), is_float(B) ->
        true -> false
     end;
 compare(A, B) ->
-    error_logger:error_msg("~p =/= ~p~n", [A, B]), false.
+    false.
 
 proper_protobuffs() ->
     ?FORALL({FieldID, {Value, Type}},

@@ -12,7 +12,11 @@
 -include_lib("proper/include/proper.hrl").
 
 -include_lib("eunit/include/eunit.hrl").
- 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% TESTS DESCRIPTIONS %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 %proper_specs_test() ->
 %    ?assertEqual([],
 %		 (proper:check_specs(protobuffs_compile, [long_result]))).
@@ -25,58 +29,523 @@ proper_module_test() ->
     ?assertEqual([],
 		  proper:module(?MODULE, [long_result])).
 
-setup() ->
-    Modules = [protobuffs_io],
-    meck:new(Modules),
-    meck:expect(protobuffs_io, open,
-		fun (_, _) -> {ok, in_file} end),
-    meck:expect(protobuffs_io, close, fun (_) -> ok end),
-    meck:expect(protobuffs_io, request,
-		fun (_) -> {eof, dummy} end),
-    meck:expect(protobuffs_io, compile_forms,
-		fun (_, _) -> {ok, dummy, <<"Bytest">>, dummy} end),
-    meck:expect(protobuffs_io, write_file,
-		fun (_, _) -> ok end),
-    meck:expect(protobuffs_io, format,
-		fun (_, _, _) -> ok end),
-    meck:expect(protobuffs_io, path_open,
-		fun (Path, FileName, _) ->
-			{ok, io_device, filename:join([Path, FileName])}
-		end),
-    Modules.
+filter_forms_test_() ->
+    [test_filter_attribute_file(),
+     test_filter_attribute_module(),
+     test_filter_attribute_export(),
+     test_filter_attribute_record(),
+     test_filter_function_encode1(),
+     test_filter_function_encode2(),
+     test_filter_function_encode_extensions(),
+     test_filter_function_encode_pikachu(),
+     test_filter_function_iolist(),
+     test_function_enum_to_int(),
+     test_function_int_to_enum(),
+     test_function_decode_pikachu(),
+     test_function_decode(),
+     test_function_to_record(),
+     test_function_decode_extentions(),
+     test_function_extensions_size(),
+     test_function_has_extension(),
+     test_function_get_extension()].
 
-cleanup(Modules) -> meck:unload(Modules).
+%%%%%%%%%%%%%%%%%%%%%%%
+%%% SETUP FUNCTIONS %%%
+%%%%%%%%%%%%%%%%%%%%%%%
 
-scan_file_test_() ->
-    {foreach, fun setup/0, fun cleanup/1,
-     [?_assertMatch(ok,
-		    (protobuffs_compile:scan_file(dummy_file))),
-      ?_assertMatch(ok,
-		    (protobuffs_compile:scan_file("dummy_file.proto")))]}.
 
-scan_string_test_() ->
-    {setup, fun setup/0, fun cleanup/1,
-     [?_assertMatch(ok,
-		    (protobuffs_compile:scan_string("", "dummy")))]}.
+%%%%%%%%%%%%%%%%%%%%
+%%% ACTUAL TESTS %%%
+%%%%%%%%%%%%%%%%%%%%
+test_filter_attribute_file() ->
+    Basename = "test_module",
+    L = 1,
+    Enums = ignored,
+    Messages = ignored,
+    Acc = [],
+                 
+    Attribute = {attribute,L,file,{"DummyString",L}},
+    Expected = {attribute,L,file,{"src/"++Basename++".erl",L}},
+    [?_assertEqual([Expected],
+		   protobuffs_compile_lib:filter_forms(Messages, 
+						       Enums, 
+						       [Attribute],
+						       Basename,
+						       Acc))].
 
-generate_source_test_() ->
-    {foreach, fun setup/0, fun cleanup/1,
-     [?_assertMatch(ok,
-		    (protobuffs_compile:generate_source(dummy_file))),
-      ?_assertMatch(ok,
-		    (protobuffs_compile:generate_source("dummy_file.proto")))]}.
+test_filter_attribute_module() ->
+    Basename = "test_module",
+    Enums = ignored,
+    Messages = ignored,
+    Acc = [],
+                 
 
-parse_imports_test_() ->
-    {foreach, fun setup/0, fun cleanup/1,
-     [?_assertMatch([],
-		    (protobuffs_compile_lib:parse_imports([], dummy_path))),
-      ?_assertMatch([{import, dummy_import_file}],
-		    (protobuffs_compile_lib:parse_imports([{import,
-							    dummy_import_file}],
-							  "dummy_path"))),
-      ?_assertMatch([what_ever],
-		    (protobuffs_compile_lib:parse_imports([what_ever],
-							  dummy_path)))]}.
+    {ok,Attribute} = parse("-module(pokemon_pb)."),
+    {ok,Expected} = parse("-module("++Basename++")."),
+    [?_assertEqual([Expected],
+		   protobuffs_compile_lib:filter_forms(Messages, 
+						       Enums, 
+						       [Attribute],
+						       Basename,
+						       Acc))].
 
-parse_string_test_() ->
-    [?_assertMatch({ok,[]},protobuffs_compile_lib:parse_string(""))].
+test_filter_attribute_export() ->
+    Name = "name",
+    Fields = ignored,
+    Extends = ignored,
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Enums = ignored,
+
+    Acc = [],
+
+    {ok,Attribute} = parse("-export([encode_pikachu/1, decode_pikachu/1])."),
+    {ok,Expected} = parse("-export([encode_"++Name++"/1, decode_"++Name++"/1])."),
+    [?_assertEqual([Expected],
+     		   protobuffs_compile_lib:filter_forms(Messages, 
+     						       Enums, 
+     						       [Attribute],
+     						       Basename,
+     						       Acc))].
+
+test_filter_attribute_record() ->
+    Name = "name",
+    Fields = [{1,optional,"int32","field1",none}],
+    Extends = ignored,
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Enums = ignored,
+
+    Acc = [],
+
+    %%TODO: "def" is unused
+    %%TODO: "=dict:new()" removed
+    Template = "-record(pikachu, {abc, def,'$extensions' = dict:new()}).", 
+    ExpectedRow = "-record(name, {field1, '$extensions'}).",
+
+    {ok,Attribute} = parse(Template),
+    {ok,Expected} = parse(ExpectedRow),
+
+    [?_assertEqual([Expected],
+     		   protobuffs_compile_lib:filter_forms(Messages, 
+     						       Enums, 
+     						       [Attribute],
+     						       Basename,
+     						       Acc))].
+
+test_filter_function_encode1() ->
+    Messages = ignored,
+    Enums = ignored,
+    Basename = ignored,
+
+    {ok,Function} = parse("encode(Record) -> encode(element(1, Record), Record)."),
+
+    Acc = [],
+
+    [?_assertEqual([Function],
+		   protobuffs_compile_lib:filter_forms(Messages, 
+						       Enums, 
+						       [Function],
+						       Basename,
+						       Acc))].
+
+test_filter_function_encode2() ->
+    Name = "name",
+    Fields = ignored,
+    Extends = ignored,
+    Messages = [{Name,Fields,Extends}],
+    Enums = ignored,
+    Basename = ignored,
+
+    {ok,Function} = parse(
+		      "encode(pikachu, Record) -> 
+                         iolist_to_binary(iolist(pikachu, Record) ++ 
+                                          encode_extensions(Record))."),
+
+    {ok,FilterdFunction} = parse("encode("++Name++", Record) -> 
+                         iolist_to_binary(iolist("++Name++", Record) ++ 
+                                          encode_extensions(Record))."),
+    
+    Acc = [],
+    
+    [?_assertEqual([FilterdFunction],
+		   protobuffs_compile_lib:filter_forms(Messages, 
+						       Enums, 
+						       [Function],
+						       Basename,
+						       Acc))].
+
+test_filter_function_encode_extensions() ->
+    Name = "name",
+    Fields = ignored,
+    Extends = ignored,
+    Messages = [{Name,Fields,Extends}],
+    Enums = ignored,
+    Basename = ignored,
+
+    {ok,Function} = parse(
+		      "encode_extensions(#pikachu{'$extensions' = Extends}) ->
+                           [pack(Key, Optionalness, Data, Type, Accer) ||
+                                {Key, 
+                                 {Optionalness, Data, Type, Accer}} <- 
+                                    dict:to_list(Extends)];
+                       encode_extensions(_) -> []."),
+    
+    {ok,FilterdFunction} = parse(
+			    "encode_extensions(#"++Name++"{'$extensions' = Extends}) ->
+                                [pack(Key, Optionalness, Data, Type, Accer) ||
+                                      {Key, 
+                                       {Optionalness, Data, Type, Accer}} <- 
+                                         dict:to_list(Extends)];
+                             encode_extensions(_) -> []."),
+    
+    Acc = [],
+    
+    [?_assertEqual([FilterdFunction],
+		   protobuffs_compile_lib:filter_forms(Messages, 
+						       Enums, 
+						       [Function],
+						       Basename,
+						       Acc))].
+
+test_filter_function_encode_pikachu() ->
+    Name = "name",
+    Fields = ignored,
+    Extends = ignored,
+    Messages = [{Name,Fields,Extends}],
+    Enums = ignored,
+    Basename = ignored,
+
+    {ok,Function} = parse(
+		 "encode_pikachu(Record) when is_record(Record, pikachu) ->
+                      encode(pikachu, Record)."),
+    {ok,FilterdFunction} = parse(
+		 "encode_"++Name++"(Record) when is_record(Record, "++Name++") ->
+                      encode("++Name++", Record)."),
+
+    Acc = [],
+
+    [?_assertEqual([FilterdFunction],
+		   protobuffs_compile_lib:filter_forms(Messages, 
+						       Enums, 
+						       [Function],
+						       Basename,
+						       Acc))].
+
+test_filter_function_iolist() ->
+    Extends = ignored,
+    Name = "name",
+    Functions = [{1,optional,"int32","field1",none},
+		 {2,optional,"int32","field2",none}],
+    Messages = [{Name,Functions,ignored}],
+    Enums = ignored,
+    Basename = ignored,
+
+    PackFmt = "pack(~w, ~w, with_default(Record#~s.~s, ~w), ~s, [])",
+    IolistFmt = "iolist(~s, Record) -> [~s].",
+
+    Pack = string_format(PackFmt,
+			 [1, required, "pikachu", "abc", none, "string"]),
+
+    Template = string_format(IolistFmt, ["pikachu", Pack]),
+    {ok,Function} = parse(Template),
+
+    FilterdPack =  string:join(
+		     [string_format(PackFmt,
+				    [Id, Tag, Name, FName, Default, FType]) || 
+			 {Id,Tag,FType,FName,Default} <- Functions],", "),
+    
+    Expected = string_format(IolistFmt,
+                             [Name, FilterdPack]),
+    {ok,FilterdFunction} = parse(Expected),
+
+    Acc = [],
+
+    [?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       Enums, 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([[]],
+    		   protobuffs_compile_lib:filter_forms([], 
+    						       Enums, 
+    						       [[]],
+    						       Basename,
+    						       Acc))].
+test_function_enum_to_int() ->
+    Functions = ignored,
+    Messages = ignored,
+    Enums = [{enum,"enumname",1,val}],
+    Basename = ignored,
+
+    EnumToIntFmt = "enum_to_int(~p,~p) -> ~p.",
+    EnumToInt = string:join([string_format(EnumToIntFmt,
+                                           [pikachu, value, 1])],", "),
+
+    FilterdEnumToInt = string:join(
+			 [string_format(EnumToIntFmt,
+			                [list_to_atom(ValName), EnumValue,
+			                 IntValue]) || 
+			     {enum,ValName,IntValue,EnumValue} <- Enums],", "),
+
+    {ok,Function} = parse(EnumToInt),
+    {ok,FilterdFunction} = parse(FilterdEnumToInt),
+
+    Acc = [],
+
+    [?_assertEqual([Function],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       Enums, 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
+test_function_int_to_enum() ->
+    Messages = ignored,
+    Enums = [{enum,"enumname1",1,val1},{enum,"enumname2",2,val2}],
+    Basename = ignored,
+    
+    IntToEnumFmt = "int_to_enum(~w,~w) -> ~w",
+    IntToEnum = "int_to_enum(_,Val) -> Val.",
+
+    ExpandedFunction = [string_format(IntToEnumFmt,
+				      [list_to_atom(ValName), IntValue, EnumValue]) || 
+			   {enum,ValName,IntValue,EnumValue} <- Enums],
+    FilterdIntToEnum = string:join(ExpandedFunction++[IntToEnum],"; "),
+
+    {ok,Function} = parse(IntToEnum),
+    {ok,FilterdFunction} = parse(FilterdIntToEnum),
+    
+    Acc = [],
+    
+    [?_assertEqual([Function],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       Enums, 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
+test_function_decode_pikachu() ->
+    Name = "name",
+    Fields = ignored,
+    Extends = ignored,
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Acc = [],
+
+    DecodePikachuFmt = "decode_~s(Bytes) when is_binary(Bytes) -> decode(~s, Bytes).",
+    TemplateFunction = string_format(DecodePikachuFmt,["pikachu", "pikachu"]),
+    ExpectedFunction = string_format(DecodePikachuFmt,[Name, Name]),
+    
+    {ok,Function} = parse(TemplateFunction),
+    {ok,FilterdFunction} = parse(ExpectedFunction),
+
+    [?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
+test_function_decode() ->
+    Name = "name",
+    Fields = [{1,optional,"int32","field1",none},
+	      {2,optional,"int32","field2",none}],
+    Extends = ignored,
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Enums = [{enum,"enumname1",1,val1},{enum,"enumname2",2,val2}],
+    Acc = [],
+
+    TypesFmt = "{~w,~s,~s,[]}",
+    DecodeFmt = "decode(~s, Bytes) when is_binary(Bytes) -> Types = [~s], Defaults = [{false, '$extensions', dict:new()}], Decoded = decode(Bytes, Types, Defaults), to_record(~s, Decoded).",
+    
+    TemplateTypes = string_format(TypesFmt,[1,"abc","int32"]),
+    TemplateFunction = string_format(DecodeFmt,["pikachu",TemplateTypes,"pikachu"]),
+
+    ExpectedTypes = string:join([string_format(TypesFmt,[Id,FName,Type])||{Id,_,Type,FName,_} <- Fields ],", "),
+    ExpectedFunction = string_format(DecodeFmt,[Name,ExpectedTypes,Name]),
+    
+    {ok,Function} = parse(TemplateFunction),
+    {ok,FilterdFunction} = parse(ExpectedFunction),
+
+    [?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
+test_function_to_record() ->
+    Name = "name",
+    Fields = [],
+    Extends = ignored,
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Enums = [],
+    Acc = [],
+
+    ToRecordFmt = "to_record(~s, DecodedTuples) -> Record1 = lists:foldr(fun({_FNum, Name, Val}, Record) -> set_record_field(record_info(fields, ~s), Record, Name, Val) end, #~s{}, DecodedTuples), decode_extensions(Record1).",
+
+    TemplateToRecord = string_format(ToRecordFmt,["pikachu","pikachu","pikachu"]),
+    
+    ExpectedToRecord = string_format(ToRecordFmt,[Name,Name,Name]),
+
+    {ok,Function} = parse(TemplateToRecord),
+    {ok,FilterdFunction} = parse(ExpectedToRecord),
+
+    [?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
+test_function_decode_extentions() ->
+    Name = "name",
+    Fields = [],
+    Extends = [],
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Enums = [],
+    Acc = [],
+    
+    DecodeExtensionsFmt = "decode_extensions(#~s{'$extensions' = Extensions} = Record) ->"
+	++ " Types = [],"
+	++" NewExtensions = decode_extensions(Types, dict:to_list(Extensions), []),"
+	++ " Record#~s{'$extensions' = NewExtensions};"
+	++ " decode_extensions(Record) -> Record.",
+
+    TemplateFunction = string_format(DecodeExtensionsFmt,["pikachu","pikachu"]),
+    ExpectedFunction = string_format(DecodeExtensionsFmt,[Name,Name]),
+    
+    {ok,Function} = parse(TemplateFunction),
+    {ok,FilterdFunction} = parse(ExpectedFunction),
+
+    [?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
+test_function_extensions_size() ->
+    Name = "name",
+    Fields = [],
+    Extends = [],
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Enums = [],
+    Acc = [],
+
+    ExtensionsSizeFmt = "extension_size(#~s{'$extensions' = Extensions}) ->"
+	++ " dict:size(Extensions);"
+	++ " extension_size(_) ->"
+	++ " 0.",
+
+    TemplateFunction = string_format(ExtensionsSizeFmt,["pikachu"]),
+    ExpectedFunction = string_format(ExtensionsSizeFmt,[Name]),
+    
+    {ok,Function} = parse(TemplateFunction),
+    {ok,FilterdFunction} = parse(ExpectedFunction),
+    
+    [?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
+test_function_has_extension() ->
+    Name = "name",
+    Fields = [],
+    Extends = [],
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Enums = [],
+    Acc = [],
+
+    HasExtensionFmt = "has_extension(#~s{'$extensions' = Extensions}, FieldKey) -> " ++
+	"dict:is_key(FieldKey, Extensions); " ++ 
+	"has_extension(_Record, _FieldName) -> false.",
+    
+    TemplateFunction = string_format(HasExtensionFmt,["pikachu"]),
+    ExpectedFunction = string_format(HasExtensionFmt,[Name]), %%TODO: Test extended
+    ExpectedFunction1 = "has_extension(_Record, _FieldName) -> false.",
+
+    {ok,Function} = parse(TemplateFunction),
+    {ok,FilterdFunction} = parse(ExpectedFunction1),
+    
+    [?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+
+test_function_get_extension() ->
+    Name = "name",
+    Fields = [],
+    Extends = [],
+    Messages = [{Name,Fields,Extends}],
+    Basename = ignored,
+    Enums = [],
+    Acc = [],
+
+    GetExtensionFmt1 = "get_extension(Record, fieldatom) when is_record(Record, ~s) ->"
+	++ " get_extension(Record, 1);",
+    GetExtensionFmt2 = " get_extension(#~s{'$extensions' = Extensions}, Int)"
+	++ " when is_integer(Int) ->"
+	++ " case dict:find(Int, Extensions) of"
+	++ " {ok, {_Rule, Value, _Type, _Opts}} ->"
+	++ " {ok, Value};"
+	++ " {ok, Binary} ->"
+	++ " {raw, Binary};"
+	++ " error ->"
+	++ " undefined"
+	++ " end;"
+	++ " get_extension(_Record, _FieldName) ->"
+	++ " undefined.",
+    TemplateFunction = string_format(GetExtensionFmt1++GetExtensionFmt2,["pikachu","pikachu"]),
+    ExpectedFunction = string_format(GetExtensionFmt2,["name"]),
+
+    {ok,Function} = parse(TemplateFunction),
+    {ok,FilterdFunction} = parse(ExpectedFunction),
+
+    ?debugFmt("~n~w~n",[protobuffs_compile_lib:filter_forms(Messages, 
+							    [], 
+							    [Function],
+							    Basename,
+							    Acc)]),
+    ?debugFmt("~n~w~n",[[FilterdFunction]]),
+    
+    [?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc))].
+    
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%% HELPER FUNCTIONS %%%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+parse(String) -> 
+    {ok,Tokens,_} = erl_scan:string(String), 
+    erl_parse:parse_form(Tokens).
+
+string_format(FmtString,String) ->
+    lists:flatten(io_lib:format(FmtString,String)).
