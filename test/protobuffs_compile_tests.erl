@@ -487,25 +487,48 @@ test_function_extensions_size() ->
 test_function_has_extension() ->
     Name = "name",
     Fields = [],
-    Extends = [],
-    Messages = [{Name,Fields,Extends}],
+    Extends = [{1, rule, "int32", "field1", []}],
+    Messages1 = [{Name,Fields,[]}],
+    Messages2 = [{Name,Fields,disallowed}],
+    Messages3 = [{Name,Fields,Extends}],
     Basename = ignored,
     Enums = [],
     Acc = [],
 
-    HasExtensionFmt = "has_extension(#~s{'$extensions' = Extensions}, FieldKey) -> " ++
-	"dict:is_key(FieldKey, Extensions); " ++ 
-	"has_extension(_Record, _FieldName) -> false.",
+    HasExtensionFmt = "has_extension(#~s{'$extensions' = Extensions}, ~s) -> "
+	"dict:is_key(~s, Extensions); ",
+    HasExtensionFmt1 = "has_extension(#~s{'$extensions' = Extensions}, ~w) ->"
+	"dict:is_key(~w, Extensions); ",
+    DefaultFmt = "has_extension(_Record, _FieldName) -> false.",
     
-    TemplateFunction = string_format(HasExtensionFmt,["pikachu"]),
-    ExpectedFunction = string_format(HasExtensionFmt,[Name]), %%TODO: Test extended
-    ExpectedFunction1 = "has_extension(_Record, _FieldName) -> false.",
+    TemplateFunction = string_format(HasExtensionFmt ++ DefaultFmt,
+				     ["pikachu","FieldKey","FieldKey"]),
+    ExpectedFunction = string_format(HasExtensionFmt ++ DefaultFmt,
+				     [Name,"FieldKey","FieldKey"]),
+    ExpectedFunction1 = DefaultFmt,
+    ExpectedFunction2 = string_format(HasExtensionFmt1 ++ 
+					  HasExtensionFmt ++ 
+					  DefaultFmt,
+				      [Name,1,1,Name,"field1","field1"]),
 
     {ok,Function} = parse(TemplateFunction),
     {ok,FilterdFunction} = parse(ExpectedFunction1),
-    
+    {ok,FilterdFunction1} = parse(ExpectedFunction2),
+
     [?_assertEqual([FilterdFunction],
-    		   protobuffs_compile_lib:filter_forms(Messages, 
+    		   protobuffs_compile_lib:filter_forms(Messages1, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction],
+    		   protobuffs_compile_lib:filter_forms(Messages2, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction1],
+    		   protobuffs_compile_lib:filter_forms(Messages3, 
     						       [], 
     						       [Function],
     						       Basename,
@@ -514,8 +537,7 @@ test_function_has_extension() ->
 test_function_get_extension() ->
     Name = "name",
     Fields = [],
-    Extends = [],
-    Messages1 = [{Name,Fields,Extends}],
+    Messages1 = [{Name,Fields,[]}],
     Messages2 = [{Name,Fields,disallowed}],
     Basename = ignored,
     Enums = [],
@@ -538,20 +560,13 @@ test_function_get_extension() ->
 	" get_extension(_Record, _FieldName) ->"
 	" undefined.",
     TemplateFunction = string_format(GetExtensionFmt1++GetExtensionFmt2,["Record","fieldatom","pikachu","pikachu"]),
-    ExpectedFunction1 = string_format(GetExtensionFmt2,["name"]),
+    ExpectedFunction1 = string_format(GetExtensionFmt2,[Name]),
     ExpectedFunction2 = string_format(GetExtensionFmt,[]),
 
     {ok,Function} = parse(TemplateFunction),
     {ok,FilterdFunction1} = parse(ExpectedFunction1),
     {ok,FilterdFunction2} = parse(ExpectedFunction2),
 
-    ?debugFmt("~n~w~n",[[FilterdFunction2]]),
-    ?debugFmt("~n~w~n",[protobuffs_compile_lib:filter_forms(Messages2, 
-    						       [], 
-    						       [Function],
-    						       Basename,
-    						       Acc)]),
-    
     [?_assertEqual([FilterdFunction1],
     		   protobuffs_compile_lib:filter_forms(Messages1, 
     						       [], 

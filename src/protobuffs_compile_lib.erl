@@ -261,27 +261,27 @@ filter_has_extension([{MsgName,_,Extends}|Tail], Clause, Acc) ->
     {call, L1, {remote,L1,Dict,IsKey},[_Key,DictArg]} = Body,
     RecArg = replace_atom(OldRecArg,pikachu,atomize(MsgName)),
     Folder = fun({ID, _Rules, _Type, Name, _Other}, FoldAcc) ->
-		     AtomClause = {clause,
-				   L,
-				   [RecArg,{atom,L,atomize(Name)}],
-				   G,
-				   [{call,
-				     L,
-				     {remote,L,Dict,IsKey},
-				     [{atom,L,atomize(Name)},DictArg]
-				    }
-				   ]},
-		     IntClause = {clause,
-				  L,
-				  [RecArg,{integer,L,ID}],
-				  G,[{call,
-				      L,
-				      {remote,L,Dict,IsKey},
-				      [{integer,L,ID},DictArg]
-				     }
-				    ]},
-		     [AtomClause,IntClause|FoldAcc]
-	     end,
+    		     AtomClause = {clause,
+    				   L,
+    				   [RecArg,{atom,L,atomize(Name)}],
+    				   G,
+    				   [{call,
+    				     L,
+    				     {remote,L,Dict,IsKey},
+    				     [{atom,L,atomize(Name)},DictArg]
+    				    }
+    				   ]},
+    		     IntClause = {clause,
+    				  L,
+    				  [RecArg,{integer,L,ID}],
+    				  G,[{call,
+    				      L,
+    				      {remote,L,Dict,IsKey},
+    				      [{integer,L,ID},DictArg]
+    				     }
+    				    ]},
+    		     [AtomClause,IntClause|FoldAcc]
+    	     end,
     NewClauses = lists:foldl(Folder, [], Extends),
     NewAcc = Acc ++ NewClauses,
     filter_has_extension(Tail,Clause,NewAcc).
