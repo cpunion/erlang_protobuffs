@@ -486,6 +486,8 @@ set_line_number(L,{N,_,R}) when is_list(R) ->
 set_line_number(L,{N,_,R}) when is_tuple(R) ->
     Tuple = set_line_number(L,R),
     {N,L,Tuple};
+set_line_number(L,{N,_,R}) when is_integer(R) ->
+    {N,L,R};
 set_line_number(L,{N,_,R1,R2}) ->
     Tuple1 = set_line_number(L,R1),
     Tuple2 = set_line_number(L,R2),
