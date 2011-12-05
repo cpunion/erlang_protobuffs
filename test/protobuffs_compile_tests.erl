@@ -45,7 +45,7 @@ filter_forms_test_() ->
      test_function_decode(),
      test_function_to_record(),
      test_function_decode_extentions(),
-     test_function_extensions_size(),
+     test_function_extension_size(),
      test_function_has_extension(),
      test_function_get_extension(),
      test_function_set_extension()].
@@ -287,7 +287,8 @@ test_filter_function_iolist() ->
     						       Enums, 
     						       [[]],
     						       Basename,
-    						       Acc))].
+						       Acc))].
+
 test_function_enum_to_int() ->
     Functions = ignored,
     Messages = ignored,
@@ -457,28 +458,38 @@ test_function_decode_extentions() ->
     						       Basename,
     						       Acc))].
 
-test_function_extensions_size() ->
+test_function_extension_size() ->
     Name = "name",
     Fields = [],
     Extends = [],
-    Messages = [{Name,Fields,Extends}],
+    Messages1 = [{Name,Fields,[]}],
+    Messages2 = [{Name,Fields,disallowed}],
+    Messages3 = [{Name,Fields,Extends}],
     Basename = ignored,
     Enums = [],
     Acc = [],
 
     ExtensionsSizeFmt = "extension_size(#~s{'$extensions' = Extensions}) ->"
-	++ " dict:size(Extensions);"
-	++ " extension_size(_) ->"
-	++ " 0.",
+	" dict:size(Extensions);",
+    ExtensionsSizeDefaultFmt = " extension_size(_) ->"
+	" 0.",
 
-    TemplateFunction = string_format(ExtensionsSizeFmt,["pikachu"]),
-    ExpectedFunction = string_format(ExtensionsSizeFmt,[Name]),
-    
+    TemplateFunction = string_format(ExtensionsSizeFmt++ExtensionsSizeDefaultFmt,["pikachu"]),
+    ExpectedFunction1 = string_format(ExtensionsSizeFmt++ExtensionsSizeDefaultFmt,[Name]),
+    ExpectedFunction2 = ExtensionsSizeDefaultFmt,
+
     {ok,Function} = parse(TemplateFunction),
-    {ok,FilterdFunction} = parse(ExpectedFunction),
+    {ok,FilterdFunction1} = parse(ExpectedFunction1),
+    {ok,FilterdFunction2} = parse(ExpectedFunction2),
     
-    [?_assertEqual([FilterdFunction],
-    		   protobuffs_compile_lib:filter_forms(Messages, 
+    [?_assertEqual([FilterdFunction1],
+    		   protobuffs_compile_lib:filter_forms(Messages1, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction2],
+    		   protobuffs_compile_lib:filter_forms(Messages2, 
     						       [], 
     						       [Function],
     						       Basename,
