@@ -457,26 +457,47 @@ test_function_to_record() ->
 test_function_decode_extentions() ->
     Name = "name",
     Fields = [],
-    Extends = [],
-    Messages = [{Name,Fields,Extends}],
+    Extends = [{1, rule, "int32", "field1", []}],
+    Messages1 = [{Name,Fields,[]}],
+    Messages2 = [{Name,Fields,disallowed}],
+    Messages3 = [{Name,Fields,Extends}],
     Basename = ignored,
     Enums = [],
     Acc = [],
     
     DecodeExtensionsFmt = "decode_extensions(#~s{'$extensions' = Extensions} = Record) ->"
-	++ " Types = [],"
-	++" NewExtensions = decode_extensions(Types, dict:to_list(Extensions), []),"
-	++ " Record#~s{'$extensions' = NewExtensions};"
-	++ " decode_extensions(Record) -> Record.",
+	" Types = ~s,"
+	" NewExtensions = decode_extensions(Types, dict:to_list(Extensions), []),"
+	" Record#~s{'$extensions' = NewExtensions};",
+    DecodeExtensionsDefaultFmt = " decode_extensions(Record) -> Record.",
 
-    TemplateFunction = string_format(DecodeExtensionsFmt,["pikachu","pikachu"]),
-    ExpectedFunction = string_format(DecodeExtensionsFmt,[Name,Name]),
+    TemplateFunction = string_format(DecodeExtensionsFmt++DecodeExtensionsDefaultFmt,
+				     ["pikachu","[]","pikachu"]),
+    ExpectedFunction1 = string_format(DecodeExtensionsFmt++DecodeExtensionsDefaultFmt,
+				      [Name,"[]",Name]),
+    ExpectedFunction2 = DecodeExtensionsDefaultFmt,
+    ExpectedFunction3 = string_format(DecodeExtensionsFmt++DecodeExtensionsDefaultFmt,
+				      [Name,"[{1, field1, int32, []}]",Name]),
     
     {ok,Function} = parse(TemplateFunction),
-    {ok,FilterdFunction} = parse(ExpectedFunction),
+    {ok,FilterdFunction1} = parse(ExpectedFunction1),
+    {ok,FilterdFunction2} = parse(ExpectedFunction2),
+    {ok,FilterdFunction3} = parse(ExpectedFunction3),
 
-    [?_assertEqual([FilterdFunction],
-    		   protobuffs_compile_lib:filter_forms(Messages, 
+    [?_assertEqual([FilterdFunction1],
+    		   protobuffs_compile_lib:filter_forms(Messages1, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction2],
+		   protobuffs_compile_lib:filter_forms(Messages2, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction3],
+		   protobuffs_compile_lib:filter_forms(Messages3, 
     						       [], 
     						       [Function],
     						       Basename,
@@ -485,7 +506,7 @@ test_function_decode_extentions() ->
 test_function_extension_size() ->
     Name = "name",
     Fields = [],
-    Extends = [],
+    Extends = [{1, rule, "int32", "field1", []}],
     Messages1 = [{Name,Fields,[]}],
     Messages2 = [{Name,Fields,disallowed}],
     Messages3 = [{Name,Fields,Extends}],
@@ -505,6 +526,7 @@ test_function_extension_size() ->
     {ok,Function} = parse(TemplateFunction),
     {ok,FilterdFunction1} = parse(ExpectedFunction1),
     {ok,FilterdFunction2} = parse(ExpectedFunction2),
+    {ok,FilterdFunction3} = parse(ExpectedFunction1),
     
     [?_assertEqual([FilterdFunction1],
     		   protobuffs_compile_lib:filter_forms(Messages1, 
@@ -514,6 +536,12 @@ test_function_extension_size() ->
     						       Acc)),
      ?_assertEqual([FilterdFunction2],
     		   protobuffs_compile_lib:filter_forms(Messages2, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction3],
+    		   protobuffs_compile_lib:filter_forms(Messages3, 
     						       [], 
     						       [Function],
     						       Basename,

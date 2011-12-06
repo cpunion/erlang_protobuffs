@@ -393,7 +393,7 @@ filter_decode_extensions_clause(Msgs,[{MsgName,_,Extends}|Tail],
 		       [{integer,L,FNum},
 			{atom,L,FName},
 			{atom,L,Type},
-			erl_parse:abstract(Opts)
+			set_line_number(L,erl_parse:abstract(Opts))
 		       ]
 		      },
 		      Acc}
