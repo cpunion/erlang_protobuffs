@@ -379,14 +379,16 @@ test_function_decode_pikachu() ->
 test_function_decode() ->
     Name = "name",
     Fields = [{1,optional,"int32","field1",none},
-	      {2,required,"int32","field2",1}],
+	      {2,required,"int32","field2",1},
+	      {3,repeated,"int32","field3",none},
+	      {4,repeated_packed,"name","field4",none}],
     Messages1 = [{Name,Fields,ignored}],
     Messages2 = [{Name,Fields,disallowed}],
     Basename = ignored,
     Enums = [{enum,"enumname1",1,val1},{enum,"enumname2",2,val2}],
     Acc = [],
 
-    TypesFmt = "{~w,~s,~s,[]}",
+    TypesFmt = "{~w,~s,~s,[~s]}",
     DecodeFmt = "decode(~s, Bytes) when is_binary(Bytes) -> "
 	"Types = [~s]," 
 	"Defaults = ~s,"
@@ -395,16 +397,19 @@ test_function_decode() ->
     
     TemplateTypes = string_format(TypesFmt,[1,
 					    "abc",
-					    "int32"]),
+					    "int32",
+					    ""]),
     TemplateFunction = string_format(DecodeFmt,["pikachu",
 						TemplateTypes,
 						"[{false, '$extensions', dict:new()}]",
 						"pikachu"]),
-
-    ExpectedTypes = string_format(TypesFmt,[1,"field1","int32"]) ++ "," ++
-	string_format(TypesFmt,[2,"field2","int32"]),
+    
+    ExpectedTypes = string_format(TypesFmt,[1,"field1","int32",""]) ++ "," ++
+	string_format(TypesFmt,[2,"field2","int32",""]) ++ "," ++ 
+	string_format(TypesFmt,[3,"field3","int32","repeated"]) ++ "," ++
+	string_format(TypesFmt,[4,"field4","name","is_record, repeated_packed"]),
     ExpectedFunction1 = string_format(DecodeFmt,[Name,
-						ExpectedTypes,
+						 ExpectedTypes,
 						"[{2, field2, 1},{false, '$extensions', dict:new()}]",
 						Name]),
     ExpectedFunction2 = string_format(DecodeFmt,[Name,
