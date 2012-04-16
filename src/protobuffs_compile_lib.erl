@@ -4,10 +4,15 @@
 
 -export([parse_string/1, filter_forms/5,
          replace_atom/3]).
+-export([collect_full_messages/1]).
+-export([type_path_to_type/1]).
+
+
+-record(collected,{enum=[], msg=[], extensions=[]}).
 
 -type message() :: {string(),list(),atom()}.
 -type function_tuple() :: {'function',integer(),atom(),integer(),[any()]}.
--type enum_tuple() :: {'enum',string(),integer(),integer()}.
+-type enum_tuple() :: {'enum',string(),integer(),atom()}.
 -type attribute_tuple() :: {'attribute',integer(),atom(),any()}.
 -type clause_tuple() :: {'clause',integer(),list(),list(),list()}.
 
@@ -15,7 +20,7 @@
 parse_string(String) ->
     protobuffs_parser:parse(String).
 
--spec filter_forms(message(),[enum_tuple()],[any()],string(),[any()]) -> [any()].
+-spec filter_forms(message(),[enum_tuple()],list(),string(),list()) -> list().
 filter_forms(Msgs, Enums, [{attribute,L,file,{_,_}}|Tail], Basename, Acc) ->
     filter_forms(Msgs, Enums, Tail, Basename, [{attribute,L,file,{"src/" ++ Basename ++ ".erl",L}}|Acc]);
 
@@ -153,10 +158,12 @@ filter_forms(Msgs, Enums, [Form|Tail], Basename, Acc) ->
 
 filter_forms(_, _, [], _, Acc) -> lists:reverse(Acc).
 
+-spec filter_encode_function(clause_tuple(),integer(),string()) -> function_tuple().
 filter_encode_function(Clause, L, Name) ->
     {function, L, list_to_atom("encode_" ++ string:to_lower(Name)), 1,
      [replace_atom(Clause, pikachu, atomize(Name))]}.
 
+-spec filter_export_decode_encode({string(),_,_},_) -> nonempty_maybe_improper_list().
 filter_export_decode_encode({Name, _, _}, Acc) ->
     [{list_to_atom("encode_" ++ string:to_lower(Name)), 1},
      {list_to_atom("decode_" ++ string:to_lower(Name)), 1} | Acc].
@@ -219,7 +226,7 @@ filter_set_extension([{MsgName,_,Extends}|Tail],Clause,Acc) ->
     NewAcc = lists:foldl(Folder, Acc, Extends),
     filter_set_extension(Tail,Clause,NewAcc).
 
--spec filter_get_extension_atom(list(),_,list()) -> list().
+-spec filter_get_extension_atom(list(),clause_tuple(),maybe_improper_list()) -> maybe_improper_list().
 filter_get_extension_atom([],_AtomClause,Acc) ->
     Acc;
 filter_get_extension_atom([{_,_,disallowed}|Tail],Clause,Acc) ->
@@ -238,7 +245,7 @@ filter_get_extension_atom([{Msg,_,Extends}|Tail],Clause,Acc) ->
     NewAcc = NewClauses ++ Acc,
     filter_get_extension_atom(Tail,Clause,NewAcc).
 
--spec filter_get_extension_integer(list(),_,[clause_tuple()]) -> [clause_tuple()].
+-spec filter_get_extension_integer(list(),clause_tuple(),[clause_tuple()]) -> [clause_tuple()].
 filter_get_extension_integer([],_,Acc) ->
     Acc;
 filter_get_extension_integer([{_,_,disallowed}|Tail],IntClause,Acc) ->
@@ -251,7 +258,7 @@ filter_get_extension_integer([{Msg,_,_Extends}|Tail],IntClause,Acc) ->
     NewAcc = [NewClause|Acc],
     filter_get_extension_integer(Tail,IntClause,NewAcc).
 
--spec filter_has_extension(list(),_,maybe_improper_list()) -> maybe_improper_list().
+-spec filter_has_extension(list(),clause_tuple(),maybe_improper_list()) -> maybe_improper_list().
 filter_has_extension([], _, Acc) -> 
     Acc; % non-reverseal is intentional.
 filter_has_extension([{_Msg,_,disallowed}|Tail], Clause, Acc) ->
@@ -286,7 +293,7 @@ filter_has_extension([{MsgName,_,Extends}|Tail], Clause, Acc) ->
     NewAcc = Acc ++ NewClauses,
     filter_has_extension(Tail,Clause,NewAcc).
 
--spec filter_extension_size(list(),_,[clause_tuple()]) -> [clause_tuple()].
+-spec filter_extension_size(list(),clause_tuple(),[clause_tuple()]) -> [clause_tuple()].
 filter_extension_size([], _RecClause, Acc) -> % the non-reversal is intentional.
     Acc;
 filter_extension_size([{_MsgName,_,disallowed}|Tail],Clause,Acc) ->
@@ -297,13 +304,15 @@ filter_extension_size([{MsgName,_,_}|Tail],Clause,Acc) ->
     NewAcc = [NewClause | Acc],
     filter_extension_size(Tail,Clause,NewAcc).
 
--spec filter_encode_clause({string() | char(),_,_},clause_tuple()) -> clause_tuple().
+-spec filter_encode_clause({string(),_,_},clause_tuple()) -> clause_tuple().
 filter_encode_clause({MsgName, _Fields,_Extends}, Clause) ->
     replace_atom(Clause,pikachu,atomize(MsgName)).
 
+-spec expand_iolist_function(list(), integer(), clause_tuple()) -> function_tuple().
 expand_iolist_function(Msgs, Line, Clause) ->
     {function,Line,iolist,2,[filter_iolist_clause(Msg, Clause) || Msg <- Msgs]}.
 
+-spec filter_iolist_clause({string(), list(), _}, clause_tuple()) -> clause_tuple().
 filter_iolist_clause({MsgName, Fields, _Extends}, {clause,_,Args,Guards,[{cons,_,Call,{nil,L}}]}) ->
     F1 = lists:reverse([case Tag of
 			    optional ->
@@ -324,7 +333,7 @@ filter_iolist_clause({MsgName, Fields, _Extends}, {clause,_,Args,Guards,[{cons,_
 		       end, {nil,L}, F1),
     {clause,L,replace_atom(Args,pikachu,atomize(MsgName)),Guards,[Cons]}.
 
--spec expand_decode_function(list(),_,_) -> function_tuple().
+-spec expand_decode_function(list(),_,_) -> [clause_tuple()].
 expand_decode_function(Msgs, _Line, Clause) ->
     [filter_decode_clause(Msgs, Msg, Clause) || Msg <- Msgs].
 
@@ -421,7 +430,7 @@ decode_opts(Msgs, Tag, Type) ->
             Opts0
     end.
 
--spec expand_to_record_function(list(),integer(),_) -> function_tuple().
+-spec expand_to_record_function(list(),integer(),list()) -> [clause_tuple()].
 expand_to_record_function(Msgs, _Line, [Clause]) ->
     [filter_to_record_clause(Msg, Clause) || Msg <- Msgs].
 
@@ -450,7 +459,7 @@ filter_enum_to_int_clause({enum,EnumTypeName,IntValue,EnumValue},
     NewArgs = replace_atom(A1, value, EnumValue),
     {clause,L1,NewArgs,Guards,[{integer,L2,IntValue}]}.
 
--spec expand_int_to_enum_function([enum_tuple()],integer(),clause_tuple()) -> function_tuple().
+-spec expand_int_to_enum_function([enum_tuple()],integer(),clause_tuple()) -> [clause_tuple()].
 expand_int_to_enum_function([], _Line, Clause) ->
     [Clause];
 expand_int_to_enum_function(Enums, _Line, Clause) ->
@@ -496,3 +505,126 @@ set_line_number(L,{N,_,A}) when is_atom(A) ->
     {N,L,A};
 set_line_number(_,V) ->
     V.
+
+-spec collect_full_messages(list()) -> #collected{}.
+collect_full_messages(Data) -> collect_full_messages(Data, #collected{}).
+
+-spec collect_full_messages(list(),#collected{}) -> #collected{}.
+collect_full_messages([{message, Name, Fields} | Tail], Collected) ->
+    ListName = case erlang:is_list (hd(Name)) of
+		   true -> Name;
+		   false -> [Name]
+	       end,
+
+    FieldsOut = lists:foldl(
+		  fun ({_,_,_,_,_} = Input, TmpAcc) -> [Input | TmpAcc];
+		      (_, TmpAcc) -> TmpAcc
+		  end, [], Fields),
+
+    Enums = lists:foldl(
+	      fun ({enum,C,D}, TmpAcc) -> [{enum, [C | ListName], D} | TmpAcc];
+		  (_, TmpAcc) -> TmpAcc
+	      end, [], Fields),
+
+    Extensions = lists:foldl(
+		   fun ({extensions, From, To}, TmpAcc) -> [{From,To}|TmpAcc];
+		       (_, TmpAcc) -> TmpAcc
+		   end, [], Fields),
+
+    SubMessages = lists:foldl(
+		    fun ({message, C, D}, TmpAcc) -> [{message, [C | ListName], D} | TmpAcc];
+			(_, TmpAcc) -> TmpAcc
+		    end, [], Fields),
+
+    ExtendedFields = case Extensions of
+			 [] -> disallowed;
+			 _ -> []
+		     end,
+
+    NewCollected = Collected#collected{
+		     msg=[{ListName, FieldsOut, ExtendedFields} | Collected#collected.msg],
+		     extensions=[{ListName,Extensions} | Collected#collected.extensions]
+		    },
+    collect_full_messages(Tail ++ SubMessages ++ Enums, NewCollected);
+collect_full_messages([{enum, Name, Fields} | Tail], Collected) ->
+    ListName = case erlang:is_list (hd(Name)) of
+		   true -> Name;
+		   false -> [Name]
+	       end,
+
+    FieldsOut = lists:foldl(
+		  fun (Field, TmpAcc) ->
+			  case Field of
+			      {EnumAtom, IntValue} -> [{enum,
+                        type_path_to_type(ListName), 
+							IntValue, 
+							EnumAtom} | TmpAcc];
+			      _ -> TmpAcc
+			  end
+		  end, [], Fields),
+
+    NewCollected = Collected#collected{enum=FieldsOut++Collected#collected.enum},
+    collect_full_messages(Tail, NewCollected);
+collect_full_messages([{package, _PackageName} | Tail], Collected) ->
+    collect_full_messages(Tail, Collected);
+collect_full_messages([{option,_,_} | Tail], Collected) ->
+    collect_full_messages(Tail, Collected);
+collect_full_messages([{import, _Filename} | Tail], Collected) ->
+    collect_full_messages(Tail, Collected);
+collect_full_messages([{extend, Name, ExtendedFields} | Tail], Collected) ->
+    ListName = case erlang:is_list (hd(Name)) of
+		   true -> Name;
+		   false -> [Name]
+	       end,
+
+    CollectedMsg = Collected#collected.msg,
+    {ListName,FieldsOut,ExtendFields} = lists:keyfind(ListName,1,CollectedMsg),
+    {ListName,Extensions} = lists:keyfind(ListName,1,Collected#collected.extensions),
+
+    FunNotInReservedRange = fun(Id) -> not(19000 =< Id andalso Id =< 19999) end,
+    FunInRange = fun(Id,From,max) -> From =< Id andalso Id =< 16#1fffffff;
+		    (Id,From,To) -> From =< Id andalso Id =< To
+		 end,
+
+    ExtendedFieldsOut = lists:append(FieldsOut,
+				     lists:foldl(
+				       fun ({Id, _, _, FieldName, _} = Input, 
+					    TmpAcc) ->
+					       case lists:any(
+						      fun({From,To}) -> 
+							      FunNotInReservedRange(Id) 
+								  andalso 
+								  FunInRange(Id,From,To)
+						      end,
+						      Extensions) of 
+						   true ->
+						       [Input | TmpAcc];
+						   _ ->
+						       error_logger:error_report(["Extended field not in valid range",
+										  {message, Name},
+										  {field_id,Id},
+										  {field_name,FieldName},
+										  {defined_ranges,Extensions},
+										  {reserved_range,{19000,19999}},
+										  {max,16#1fffffff}]),
+						       throw(out_of_range)
+					       end;
+					   (_, TmpAcc) -> TmpAcc
+				       end, [], ExtendedFields)
+				    ),
+    NewExtends = case ExtendFields of
+		     disallowed -> disallowed;
+		     _ -> ExtendFields ++ ExtendedFieldsOut
+		 end,
+    NewCollected = Collected#collected{msg=lists:keyreplace(ListName,1,CollectedMsg,{ListName,FieldsOut,NewExtends})},
+    collect_full_messages(Tail, NewCollected);
+%% Skip anything we don't understand
+collect_full_messages([Skip|Tail], Acc) ->
+    error_logger:warning_report(["Unkown, skipping",{skip,Skip}]), 
+    collect_full_messages(Tail, Acc);
+collect_full_messages([], Collected) ->
+    Collected.
+
+-spec type_path_to_type(string()) -> string().
+type_path_to_type (TypePath) ->
+    string:join (lists:reverse (TypePath), "_").

@@ -27,6 +27,7 @@
 -ifdef(TEST).
 -compile(export_all).
 -else.
+
 -export([scan_file/1, scan_file/2, scan_string/2, scan_string/3, 
 	 generate_source/1, generate_source/2]).
 
@@ -143,132 +144,6 @@ parse_file(InFile,Acc) ->
             Acc
     end.
 
-%% [{"Location",
-%%   [{2,required,"string","country",none},
-%%    {1,required,"string","region",none}]},
-%%  {"Person",
-%%   [{5,optional,"Location","location",none},
-%%    {4,required,"int32","age",none},
-%%    {3,required,"string","phone_number",none},
-%%    {2,required,"string","address",none},
-%%    {1,required,"string","name",none}]}]
-collect_full_messages(Data) -> collect_full_messages(Data, #collected{}).
-collect_full_messages([{message, Name, Fields} | Tail], Collected) ->
-    ListName = case erlang:is_list (hd(Name)) of
-		   true -> Name;
-		   false -> [Name]
-	       end,
-
-    FieldsOut = lists:foldl(
-		  fun ({_,_,_,_,_} = Input, TmpAcc) -> [Input | TmpAcc];
-		      (_, TmpAcc) -> TmpAcc
-		  end, [], Fields),
-
-    Enums = lists:foldl(
-	      fun ({enum,C,D}, TmpAcc) -> [{enum, [C | ListName], D} | TmpAcc];
-		  (_, TmpAcc) -> TmpAcc
-	      end, [], Fields),
-
-    Extensions = lists:foldl(
-		   fun ({extensions, From, To}, TmpAcc) -> [{From,To}|TmpAcc];
-		       (_, TmpAcc) -> TmpAcc
-		   end, [], Fields),
-
-    SubMessages = lists:foldl(
-		    fun ({message, C, D}, TmpAcc) -> [{message, [C | ListName], D} | TmpAcc];
-			(_, TmpAcc) -> TmpAcc
-		    end, [], Fields),
-
-    ExtendedFields = case Extensions of
-			 [] -> disallowed;
-			 _ -> []
-		     end,
-
-    NewCollected = Collected#collected{
-		     msg=[{ListName, FieldsOut, ExtendedFields} | Collected#collected.msg],
-		     extensions=[{ListName,Extensions} | Collected#collected.extensions]
-		    },
-    collect_full_messages(Tail ++ SubMessages ++ Enums, NewCollected);
-collect_full_messages([{enum, Name, Fields} | Tail], Collected) ->
-    ListName = case erlang:is_list (hd(Name)) of
-		   true -> Name;
-		   false -> [Name]
-	       end,
-
-    FieldsOut = lists:foldl(
-		  fun (Field, TmpAcc) ->
-			  case Field of
-			      {EnumAtom, IntValue} -> [{enum, 
-							type_path_to_type(ListName), 
-							IntValue, 
-							EnumAtom} | TmpAcc];
-			      _ -> TmpAcc
-			  end
-		  end, [], Fields),
-
-    NewCollected = Collected#collected{enum=FieldsOut++Collected#collected.enum},
-    collect_full_messages(Tail, NewCollected);
-collect_full_messages([{package, _PackageName} | Tail], Collected) ->
-    collect_full_messages(Tail, Collected);
-collect_full_messages([{option,_,_} | Tail], Collected) ->
-    collect_full_messages(Tail, Collected);
-collect_full_messages([{import, _Filename} | Tail], Collected) ->
-    collect_full_messages(Tail, Collected);
-collect_full_messages([{extend, Name, ExtendedFields} | Tail], Collected) ->
-    ListName = case erlang:is_list (hd(Name)) of
-		   true -> Name;
-		   false -> [Name]
-	       end,
-
-    CollectedMsg = Collected#collected.msg,
-    {ListName,FieldsOut,ExtendFields} = lists:keyfind(ListName,1,CollectedMsg),
-    {ListName,Extensions} = lists:keyfind(ListName,1,Collected#collected.extensions),
-
-    FunNotInReservedRange = fun(Id) -> not(19000 =< Id andalso Id =< 19999) end,
-    FunInRange = fun(Id,From,max) -> From =< Id andalso Id =< 16#1fffffff;
-		    (Id,From,To) -> From =< Id andalso Id =< To
-		 end,
-
-    ExtendedFieldsOut = lists:append(FieldsOut,
-				     lists:foldl(
-				       fun ({Id, _, _, FieldName, _} = Input, 
-					    TmpAcc) ->
-					       case lists:any(
-						      fun({From,To}) -> 
-							      FunNotInReservedRange(Id) 
-								  andalso 
-								  FunInRange(Id,From,To)
-						      end,
-						      Extensions) of 
-						   true ->
-						       [Input | TmpAcc];
-						   _ ->
-						       error_logger:error_report(["Extended field not in valid range",
-										  {message, Name},
-										  {field_id,Id},
-										  {field_name,FieldName},
-										  {defined_ranges,Extensions},
-										  {reserved_range,{19000,19999}},
-										  {max,16#1fffffff}]),
-						       throw(out_of_range)
-					       end;
-					   (_, TmpAcc) -> TmpAcc
-				       end, [], ExtendedFields)
-				    ),
-    NewExtends = case ExtendFields of
-		     disallowed -> disallowed;
-		     _ -> ExtendFields ++ ExtendedFieldsOut
-		 end,
-    NewCollected = Collected#collected{msg=lists:keyreplace(ListName,1,CollectedMsg,{ListName,FieldsOut,NewExtends})},
-    collect_full_messages(Tail, NewCollected);
-%% Skip anything we don't understand
-collect_full_messages([Skip|Tail], Acc) ->
-    error_logger:warning_report(["Unkown, skipping",
-				 {skip,Skip}]), 
-    collect_full_messages(Tail, Acc);
-collect_full_messages([], Collected) ->
-    Collected.
-
 %% @hidden
 resolve_types (Data, Enums) -> resolve_types (Data, Data, Enums, []).
 resolve_types ([{TypePath, Fields,Extended} | Tail], AllPaths, Enums, Acc) ->
@@ -299,7 +174,9 @@ resolve_types ([{TypePath, Fields,Extended} | Tail], AllPaths, Enums, Acc) ->
 						ResultType ->
 						    ResultType
 					    end,
-					[{Index, Rules, type_path_to_type (RealPath), Identifier, Other} | TmpAcc]
+                            [{Index, Rules,
+                            protobuffs_compile_lib:type_path_to_type(RealPath),
+                            Identifier, Other} | TmpAcc]
 				end;
 			    _ -> TmpAcc
 			end
@@ -312,7 +189,9 @@ resolve_types ([{TypePath, Fields,Extended} | Tail], AllPaths, Enums, Acc) ->
 			  MidExtendOut = lists:foldl(FolderFun, [], Extended),
 			  lists:reverse(MidExtendOut)
 		  end,
-    resolve_types (Tail, AllPaths, Enums, [{type_path_to_type (TypePath), lists:reverse (FieldsOut), ExtendedOut } | Acc]);
+    resolve_types (Tail, AllPaths, Enums,
+        [{protobuffs_compile_lib:type_path_to_type(TypePath),
+        lists:reverse (FieldsOut), ExtendedOut } | Acc]);
 resolve_types ([], _, _, Acc) ->
     Acc.
 
@@ -355,7 +234,8 @@ is_scalar_type (_) -> false.
 is_enum_type(_Type, [], _Enums) ->
     false;
 is_enum_type(Type, [TypePath|Paths], Enums) ->
-    case is_enum_type(type_path_to_type(TypePath), Enums) of
+    case is_enum_type(protobuffs_compile_lib:type_path_to_type(TypePath),
+            Enums) of
 	true ->
 	    {true,TypePath};
 	false ->
@@ -396,17 +276,13 @@ find_type ([Type | TailTypes], KnownTypes) ->
             RealType
     end.
 
-%% @hidden
-type_path_to_type (TypePath) ->
-    string:join (lists:reverse (TypePath), "_").
-
 generate_output(Options, Basename, String, OutputFunction) ->
     {ok, FirstParsed} = protobuffs_compile_lib:parse_string(String),
     ImportPaths = ["./", "src/"
 		   | proplists:get_value(imports_dir, Options, [])],
     Parsed = parse_imports(FirstParsed,
                            ImportPaths),
-    Collected = collect_full_messages(Parsed),
+    Collected = protobuffs_compile_lib:collect_full_messages(Parsed),
     Messages = resolve_types(Collected#collected.msg,
                              Collected#collected.enum),
     OutputFunction(Basename, 

@@ -48,7 +48,8 @@ filter_forms_test_() ->
      test_function_extension_size(),
      test_function_has_extension(),
      test_function_get_extension(),
-     test_function_set_extension()].
+     test_function_set_extension(),
+     test_function_collect_full_messages()].
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%% SETUP FUNCTIONS %%%
@@ -438,22 +439,34 @@ test_function_to_record() ->
     Name = "name",
     Fields = [],
     Extends = ignored,
-    Messages = [{Name,Fields,Extends}],
+    Messages1 = [{Name,Fields,Extends}],
+    Messages2 = [{Name,Fields,disallowed}],
     Basename = ignored,
     Enums = [],
     Acc = [],
 
-    ToRecordFmt = "to_record(~s, DecodedTuples) -> Record1 = lists:foldr(fun({_FNum, Name, Val}, Record) -> set_record_field(record_info(fields, ~s), Record, Name, Val) end, #~s{}, DecodedTuples), decode_extensions(Record1).",
+    ToRecordFmt = "to_record(~s, DecodedTuples) -> "
+	"Record1 = lists:foldr(fun({_FNum, Name, Val}, Record) -> "
+	"set_record_field(record_info(fields, ~s), Record, Name, Val) end, "
+	"#~s{}, DecodedTuples), ~s.",
 
-    TemplateToRecord = string_format(ToRecordFmt,["pikachu","pikachu","pikachu"]),
+    TemplateToRecord = string_format(ToRecordFmt,["pikachu","pikachu","pikachu","decode_extensions(Record1)"]),
     
-    ExpectedToRecord = string_format(ToRecordFmt,[Name,Name,Name]),
+    ExpectedToRecord1 = string_format(ToRecordFmt,[Name,Name,Name,"decode_extensions(Record1)"]),
+    ExpectedToRecord2 = string_format(ToRecordFmt,[Name,Name,Name,"Record1"]),
 
     {ok,Function} = parse(TemplateToRecord),
-    {ok,FilterdFunction} = parse(ExpectedToRecord),
+    {ok,FilterdFunction1} = parse(ExpectedToRecord1),
+    {ok,FilterdFunction2} = parse(ExpectedToRecord2),
 
-    [?_assertEqual([FilterdFunction],
-    		   protobuffs_compile_lib:filter_forms(Messages, 
+    [?_assertEqual([FilterdFunction1],
+    		   protobuffs_compile_lib:filter_forms(Messages1, 
+    						       [], 
+    						       [Function],
+    						       Basename,
+    						       Acc)),
+     ?_assertEqual([FilterdFunction2],
+    		   protobuffs_compile_lib:filter_forms(Messages2, 
     						       [], 
     						       [Function],
     						       Basename,
@@ -694,6 +707,27 @@ test_function_set_extension() ->
     						       [Function],
     						       Basename,
     						       Acc))].
+
+test_function_collect_full_messages() ->
+    [?_assertEqual({collected,[],[],[]},
+		   protobuffs_compile_lib:collect_full_messages([])),
+     ?_assertEqual({collected,[],[{["MsgName"],[],disallowed}],[{["MsgName"],[]}]},
+		   protobuffs_compile_lib:collect_full_messages([{message, "MsgName", []}])),
+     ?_assertEqual({collected,[],[{["MsgName"],[],disallowed}],[{["MsgName"],[]}]},
+		   protobuffs_compile_lib:collect_full_messages([{message, ["MsgName"], []}])),
+     ?_assertEqual({collected,[],[{["MsgName"],[{5,optional,"Location","location",none}],disallowed}],[{["MsgName"],[]}]},
+		   protobuffs_compile_lib:collect_full_messages([{message, ["MsgName"], [{5,optional,"Location","location",none}]}])),
+     ?_assertEqual({collected,[],[],[]},
+		   protobuffs_compile_lib:collect_full_messages([{enum, "EnumName", []}])),
+     ?_assertEqual({collected,[{enum,"EnumName",1,value}],[],[]},
+		   protobuffs_compile_lib:collect_full_messages([{enum, "EnumName", [{value, 1}]}])),
+     ?_assertEqual({collected,[],[],[]},
+		   protobuffs_compile_lib:collect_full_messages([{package, "PackageName"}])),
+     ?_assertEqual({collected,[],[],[]},
+		   protobuffs_compile_lib:collect_full_messages([{option,a,b}])),
+     ?_assertEqual({collected,[],[],[]},
+		   protobuffs_compile_lib:collect_full_messages([{import, "Filename"}]))].
+    
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
