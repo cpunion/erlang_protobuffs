@@ -523,3 +523,4 @@ proper_protobuffs_service() ->
 		    compare_messages(Service, Decoded)
 	      end
 	    end).
+

@@ -612,10 +612,11 @@ collect_full_messages([{extend, Name, ExtendedFields} | Tail], Collected) ->
 					   (_, TmpAcc) -> TmpAcc
 				       end, [], ExtendedFields)
 				    ),
-    NewExtends = case ExtendFields of
-		     disallowed -> disallowed;
-		     _ -> ExtendFields ++ ExtendedFieldsOut
-		 end,
+%    NewExtends = case ExtendFields of
+%		     disallowed -> disallowed;
+%		     _ -> ExtendFields ++ ExtendedFieldsOut
+%		 end,
+    NewExtends = ExtendFields ++ ExtendedFieldsOut,
     NewCollected = Collected#collected{msg=lists:keyreplace(ListName,1,CollectedMsg,{ListName,FieldsOut,NewExtends})},
     collect_full_messages(Tail, NewCollected);
 %% Skip anything we don't understand

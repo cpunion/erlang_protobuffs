@@ -135,14 +135,12 @@ test_proto_files(Config) ->
     DataDir = (?config(data_dir, Config)),
     NumTests = (?config(num_tests, Config)),
     ProtoFiles = filelib:wildcard(filename:join([DataDir, "proto", "*.proto"])),
-    ScanProtoFiles = [scan_file(DataDir, Filename)
-		      || Filename <- ProtoFiles],
+    ScanProtoFiles = [Filename || Filename <- ProtoFiles , scan_file(DataDir, Filename)],
     Tests = lists:map(fun(Filename) -> 
 			      list_to_atom("proper_protobuffs_" ++ 
-					       filename:basename(Filename, 
-								 ".proto")) 
+					       filename:basename(Filename,".proto")) 
 		      end, 
-		      ProtoFiles),
+		      ScanProtoFiles),
     BigRes = lists:foldl(fun(Testname,Acc) ->
 				 run_test(NumTests,Testname,Acc)
 			 end, true, Tests),
@@ -220,4 +218,11 @@ scan_file(DataDir, Filename) ->
     Options = [{imports_dir,
 		[filename:join([DataDir, "proto"]),
 		 filename:join([DataDir, "proto", "import"])]}],
-    protobuffs_compile:scan_file(Path, Options).
+    try
+	ok == protobuffs_compile:scan_file(Path, Options)
+    catch out_of_range -> 
+	    TestName = filename:basename(Filename,".proto"),
+	    test_server:format("~n===Testcase ~p===~n", [TestName]),
+	    test_server:format("Test ~p:  thrown 'out_of_range' exeption ok?~n~n~n", [TestName]),
+	    false
+    end.

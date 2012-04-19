@@ -18,14 +18,17 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %proper_specs_test() ->
+%    error_logger:tty(false),
 %    ?assertEqual([],
 %		 (proper:check_specs(protobuffs_compile, [long_result]))).
 
 proper_lib_specs_test() ->
+    error_logger:tty(false),
     ?assertEqual([],
 		 (proper:check_specs(protobuffs_compile_lib, [long_result]))).
 
 proper_module_test() ->
+    error_logger:tty(false),
     ?assertEqual([],
 		  proper:module(?MODULE, [long_result])).
 
@@ -84,6 +87,7 @@ test_filter_attribute_module() ->
 
     {ok,Attribute} = parse("-module(pokemon_pb)."),
     {ok,Expected} = parse("-module("++Basename++")."),
+
     [?_assertEqual([Expected],
 		   protobuffs_compile_lib:filter_forms(Messages, 
 						       Enums, 
@@ -716,17 +720,52 @@ test_function_collect_full_messages() ->
      ?_assertEqual({collected,[],[{["MsgName"],[],disallowed}],[{["MsgName"],[]}]},
 		   protobuffs_compile_lib:collect_full_messages([{message, ["MsgName"], []}])),
      ?_assertEqual({collected,[],[{["MsgName"],[{5,optional,"Location","location",none}],disallowed}],[{["MsgName"],[]}]},
-		   protobuffs_compile_lib:collect_full_messages([{message, ["MsgName"], [{5,optional,"Location","location",none}]}])),
+		   protobuffs_compile_lib:collect_full_messages([{message, 
+								  ["MsgName"], 
+								  [{5,optional,"Location","location",none}]}])),
+     ?_assertEqual({collected,[],[{["MsgName"],[],disallowed}],[{["MsgName"],[]}]},
+		   protobuffs_compile_lib:collect_full_messages([{message, ["MsgName"], [{a,1}]}])),
+     ?_assertEqual({collected,[{enum,"MsgName_EnumName",1,value}],[{["MsgName"],[],disallowed}],[{["MsgName"],[]}]},
+		   protobuffs_compile_lib:collect_full_messages([{message, 
+								  ["MsgName"],
+								  [{enum, "EnumName", [{value, 1}]}]}])),
+     ?_assertEqual({collected,[],[{["MsgName"],[],[]}],[{["MsgName"],[{1,10}]}]},
+		   protobuffs_compile_lib:collect_full_messages([{message, ["MsgName"], [{extensions, 1, 10}]}])),
+     ?_assertEqual({collected,[],[{["SubMsg","MsgName"],[],disallowed},
+				  {["MsgName"],[],disallowed}],
+		    [{["SubMsg","MsgName"],[]},
+		     {["MsgName"],[]}]},
+		   protobuffs_compile_lib:collect_full_messages([{message, ["MsgName"], [{message, "SubMsg", []}]}])),
      ?_assertEqual({collected,[],[],[]},
 		   protobuffs_compile_lib:collect_full_messages([{enum, "EnumName", []}])),
      ?_assertEqual({collected,[{enum,"EnumName",1,value}],[],[]},
 		   protobuffs_compile_lib:collect_full_messages([{enum, "EnumName", [{value, 1}]}])),
+     ?_assertEqual({collected,[{enum,"EnumName",1,value}],[],[]},
+		   protobuffs_compile_lib:collect_full_messages([{enum, "EnumName", [{value, 1},dummy]}])),
      ?_assertEqual({collected,[],[],[]},
 		   protobuffs_compile_lib:collect_full_messages([{package, "PackageName"}])),
      ?_assertEqual({collected,[],[],[]},
 		   protobuffs_compile_lib:collect_full_messages([{option,a,b}])),
      ?_assertEqual({collected,[],[],[]},
-		   protobuffs_compile_lib:collect_full_messages([{import, "Filename"}]))].
+		   protobuffs_compile_lib:collect_full_messages([{import, "Filename"}])),
+     ?_assertEqual({collected,[],[{["ExtendedName"],[],[]}],[{["ExtendedName"],[{1,10}]}]},
+	      protobuffs_compile_lib:collect_full_messages([{message, ["ExtendedName"],[{extensions, 1, 10}]},
+							    {extend, ["ExtendedName"],[]}])),
+     ?_assertEqual({collected,[],[{["ExtendedName"],[],[]}],[{["ExtendedName"],[{1,10}]}]},
+		   protobuffs_compile_lib:collect_full_messages([{message, ["ExtendedName"],[{extensions, 1, 10}]},
+							    {extend, "ExtendedName",[dummy]}])),
+     ?_assertEqual({collected,[],[{["ExtendedName"],[],[{1,a,b,"FieldName",d}]}],[{["ExtendedName"],[{1,10}]}]},
+	      protobuffs_compile_lib:collect_full_messages([{message, ["ExtendedName"],[{extensions, 1, 10}]},
+							    {extend, ["ExtendedName"],[{1,a,b,"FieldName",d}]}])),
+     ?_assertEqual({collected,[],[{["ExtendedName"],[],[{1,a,b,"FieldName",d}]}],[{["ExtendedName"],[{1,10}]}]},
+	      protobuffs_compile_lib:collect_full_messages([{message, ["ExtendedName"],[{extensions, 1, 10}]},
+							    {extend, ["ExtendedName"],[{1,a,b,"FieldName",d}]}])),
+     ?_assertThrow(out_of_range, protobuffs_compile_lib:collect_full_messages(
+				   [{message, ["ExtendedName"],[{extensions, 1, 10}]},
+				    {extend, ["ExtendedName"],[{15,a,b,"FieldName",d}]}])),
+     ?_assertThrow(out_of_range, protobuffs_compile_lib:collect_full_messages(
+				   [{message, ["ExtendedName"],[{extensions, 19000, 19100}]},
+				    {extend, ["ExtendedName"],[{19050,a,b,"FieldName",d}]}]))].
     
 
 %%%%%%%%%%%%%%%%%%%%%%%%
