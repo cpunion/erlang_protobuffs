@@ -165,7 +165,7 @@ resolve_types ([{TypePath, Fields,Extended} | Tail], AllPaths, Enums, Acc) ->
 					RealPath =
 					    case find_type (PossiblePaths, AllPaths) of
 						false ->
-						    case is_enum_type(Type, PossiblePaths, Enums) of
+						    case protobuffs_compile_lib:is_enum_type(Type, PossiblePaths, Enums) of
 							{true,EnumType} ->
 							    EnumType;
 							false ->
@@ -229,25 +229,6 @@ is_scalar_type ("bool") -> true;
 is_scalar_type ("string") -> true;
 is_scalar_type ("bytes") -> true;
 is_scalar_type (_) -> false.
-
-%% @hidden
-is_enum_type(_Type, [], _Enums) ->
-    false;
-is_enum_type(Type, [TypePath|Paths], Enums) ->
-    case is_enum_type(protobuffs_compile_lib:type_path_to_type(TypePath),
-            Enums) of
-	true ->
-	    {true,TypePath};
-	false ->
-	    is_enum_type(Type, Paths, Enums)
-    end.
-is_enum_type(Type, Enums) ->
-    case lists:keysearch(Type,2,Enums) of
-	false ->
-	    false;
-	{value,_} ->
-	    true
-    end.
 
 %% @hidden
 sublists(List) when is_list(List) ->

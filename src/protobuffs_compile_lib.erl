@@ -7,6 +7,8 @@
 -export([collect_full_messages/1]).
 -export([type_path_to_type/1]).
 
+-export([is_enum_type/3]).
+
 
 -record(collected,{enum=[], msg=[], extensions=[]}).
 
@@ -321,7 +323,7 @@ filter_iolist_clause({MsgName, Fields, _Extends}, {clause,_,Args,Guards,[{cons,_
 				{FNum,Tag,SType,SName,none}
 			end
 			|| {FNum,Tag,SType,SName,_} = Field <- Fields ]),
-    
+
     Cons = lists:foldl(fun({FNum,Tag,SType,SName,Default},Acc) ->
 			       R1 = replace_atom(Call,pikachu,atomize(MsgName)),
 			       R2 = replace_atom(R1,abc,atomize(SName)),
@@ -347,7 +349,7 @@ filter_decode_clause(Msgs, {MsgName, Fields, Extends},
 			       atomize(SType), 
 			       decode_opts(Msgs, Tag, SType), Def} ||
 				 {FNum,Tag,SType,SName,Def} <- Fields]),
-    
+
     Cons = lists:foldl(
 	     fun({FNum, FName, Type, Opts, _Def}, Acc) ->
 		     {cons,L1,{tuple,L1,[{integer,L1,FNum},{atom,L1,FName},
@@ -365,16 +367,16 @@ filter_decode_clause(Msgs, {MsgName, Fields, Extends},
     Defaults = lists:foldr(
 		 fun
 		     ({_FNum, _FName, _Type, _Opts, none}, Acc) ->
-			 Acc;
+				  Acc;
 		     ({FNum, FName, _Type, _Opts, Def}, Acc) ->
-			 {cons,L2,{tuple,L2,[{integer,L2,FNum},
-					     {atom,L2,FName},
-					     set_line_number(L2,erl_parse:abstract(Def))
-					    ]
-				  },
-			  Acc
-			 }
-		 end,
+				  {cons,L2,{tuple,L2,[{integer,L2,FNum},
+						      {atom,L2,FName},
+						      set_line_number(L2,erl_parse:abstract(Def))
+						     ]
+					   },
+				   Acc
+				  }
+			  end,
 		 ExtendDefault,
 		 Types),
     A1 = {match,L1,{var,L1,'Types'},Cons},
@@ -556,7 +558,7 @@ collect_full_messages([{enum, Name, Fields} | Tail], Collected) ->
 		  fun (Field, TmpAcc) ->
 			  case Field of
 			      {EnumAtom, IntValue} -> [{enum,
-                        type_path_to_type(ListName), 
+							type_path_to_type(ListName), 
 							IntValue, 
 							EnumAtom} | TmpAcc];
 			      _ -> TmpAcc
@@ -612,10 +614,10 @@ collect_full_messages([{extend, Name, ExtendedFields} | Tail], Collected) ->
 					   (_, TmpAcc) -> TmpAcc
 				       end, [], ExtendedFields)
 				    ),
-%    NewExtends = case ExtendFields of
-%		     disallowed -> disallowed;
-%		     _ -> ExtendFields ++ ExtendedFieldsOut
-%		 end,
+						%    NewExtends = case ExtendFields of
+						%		     disallowed -> disallowed;
+						%		     _ -> ExtendFields ++ ExtendedFieldsOut
+						%		 end,
     NewExtends = ExtendFields ++ ExtendedFieldsOut,
     NewCollected = Collected#collected{msg=lists:keyreplace(ListName,1,CollectedMsg,{ListName,FieldsOut,NewExtends})},
     collect_full_messages(Tail, NewCollected);
@@ -629,3 +631,23 @@ collect_full_messages([], Collected) ->
 -spec type_path_to_type(string()) -> string().
 type_path_to_type (TypePath) ->
     string:join (lists:reverse (TypePath), "_").
+
+
+%% @hidden
+is_enum_type(_Type, [], _Enums) ->
+    false;
+is_enum_type(Type, [TypePath|Paths], Enums) ->
+    case is_enum_type(type_path_to_type(TypePath),
+		      Enums) of
+	true ->
+	    {true,TypePath};
+	false ->
+	    is_enum_type(Type, Paths, Enums)
+    end.
+is_enum_type(Type, Enums) ->
+    case lists:keysearch(Type,2,Enums) of
+	false ->
+	    false;
+	{value,_} ->
+	    true
+    end.

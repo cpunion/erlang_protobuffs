@@ -52,7 +52,8 @@ filter_forms_test_() ->
      test_function_has_extension(),
      test_function_get_extension(),
      test_function_set_extension(),
-     test_function_collect_full_messages()].
+     test_function_collect_full_messages(),
+     test_function_is_enum_type()].
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%% SETUP FUNCTIONS %%%
@@ -120,7 +121,7 @@ test_filter_attribute_record() ->
     Messages1 = [{Name,Fields,ignored}],
     Messages2 = [{Name,Fields,disallowed}],
     Basename = ignored,
-    Enums = ignored,
+    %Enums = ignored,
 
     Acc = [],
 
@@ -766,6 +767,12 @@ test_function_collect_full_messages() ->
      ?_assertThrow(out_of_range, protobuffs_compile_lib:collect_full_messages(
 				   [{message, ["ExtendedName"],[{extensions, 19000, 19100}]},
 				    {extend, ["ExtendedName"],[{19050,a,b,"FieldName",d}]}]))].
+
+test_function_is_enum_type() ->
+    [?_assertEqual(false,protobuffs_compile_lib:is_enum_type(dummy,[],dummy)),
+     ?_assertEqual({true,["Enum"]},protobuffs_compile_lib:is_enum_type("Enum",[["Enum"]],[{dummy,"Enum"}])),
+     ?_assertEqual({true,["Enum"]},protobuffs_compile_lib:is_enum_type("Enum",[["Test","Message"],["Enum"]],[{dummy,"Enum"}])),
+     ?_assertEqual({true,["Enum","Message"]},protobuffs_compile_lib:is_enum_type("Message_Enum",[["Enum","Message"],["Test"]],[{dummy,"Message_Enum"}]))].
     
 
 %%%%%%%%%%%%%%%%%%%%%%%%
