@@ -1,28 +1,23 @@
 -module(protobuffs_compile_lib).
 
--export([filter_int_to_enum_clause/2, atomize/1]).
-
--export([parse_string/1, filter_forms/5,
-         replace_atom/3]).
+-ifdef(TEST).
+-compile(export_all).
+-else.
+-export([filter_forms/5]).
 -export([collect_full_messages/1]).
--export([type_path_to_type/1]).
-
--export([is_enum_type/3]).
+-export([resolve_types/2]).
+-endif.
 
 
 -record(collected,{enum=[], msg=[], extensions=[]}).
 
--type message() :: {string(),list(),atom()}.
--type function_tuple() :: {'function',integer(),atom(),integer(),[any()]}.
+-type message() :: {string(),list(),atom()|list()}.
+-type function_tuple() :: {'function',integer(),atom(),integer(),list()}.
 -type enum_tuple() :: {'enum',string(),integer(),atom()}.
 -type attribute_tuple() :: {'attribute',integer(),atom(),any()}.
 -type clause_tuple() :: {'clause',integer(),list(),list(),list()}.
 
--spec parse_string(string()) -> {'error', _} | {'ok', _}.
-parse_string(String) ->
-    protobuffs_parser:parse(String).
-
--spec filter_forms(message(),[enum_tuple()],list(),string(),list()) -> list().
+-spec filter_forms([message()],[enum_tuple()],list(),string(),list()) -> list().
 filter_forms(Msgs, Enums, [{attribute,L,file,{_,_}}|Tail], Basename, Acc) ->
     filter_forms(Msgs, Enums, Tail, Basename, [{attribute,L,file,{"src/" ++ Basename ++ ".erl",L}}|Acc]);
 
@@ -165,11 +160,12 @@ filter_encode_function(Clause, L, Name) ->
     {function, L, list_to_atom("encode_" ++ string:to_lower(Name)), 1,
      [replace_atom(Clause, pikachu, atomize(Name))]}.
 
--spec filter_export_decode_encode({string(),_,_},_) -> nonempty_maybe_improper_list().
+-spec filter_export_decode_encode({string(),_,_},_) -> [{atom(),integer()}].
 filter_export_decode_encode({Name, _, _}, Acc) ->
     [{list_to_atom("encode_" ++ string:to_lower(Name)), 1},
      {list_to_atom("decode_" ++ string:to_lower(Name)), 1} | Acc].
 
+-spec filter_record(any(),[tuple()],integer(),string(),attribute_tuple()) -> attribute_tuple().
 filter_record(Extends,Fields,L,Name,{attribute, L, record, {pikachu, [FieldTemplate|Extend]}}) ->
     OutFields = [string:to_lower(A) || {_, _, _, A, _} <- lists:keysort(1, Fields)],		   
     ExtendField = case Extends of
@@ -179,7 +175,7 @@ filter_record(Extends,Fields,L,Name,{attribute, L, record, {pikachu, [FieldTempl
     Frm_Fields = [replace_atom(FieldTemplate,abc,list_to_atom(OutField)) || OutField <- OutFields] ++ ExtendField, 
     {attribute, L, record, {atomize(Name), Frm_Fields}}.
 
--spec filter_set_extension(list(),_,maybe_improper_list()) -> maybe_improper_list().
+-spec filter_set_extension(list(),_,list()) -> list().
 filter_set_extension([],_,Acc) ->
     Acc;
 filter_set_extension([{_,_,disallowed}|Tail],Clause,Acc) ->
@@ -478,7 +474,7 @@ filter_int_to_enum_clause({enum,EnumTypeName,IntValue,EnumValue}, {clause,L,_Arg
 atomize(String) ->
     list_to_atom(string:to_lower(String)).
 
--spec replace_atom(any(),atom(),atom()) -> any().
+-spec replace_atom(any(),any(),any()) -> any().
 replace_atom(Find, Find, Replace) -> 
     Replace;
 replace_atom(Tuple, Find, Replace) when is_tuple(Tuple) ->
@@ -614,15 +610,10 @@ collect_full_messages([{extend, Name, ExtendedFields} | Tail], Collected) ->
 					   (_, TmpAcc) -> TmpAcc
 				       end, [], ExtendedFields)
 				    ),
-						%    NewExtends = case ExtendFields of
-						%		     disallowed -> disallowed;
-						%		     _ -> ExtendFields ++ ExtendedFieldsOut
-						%		 end,
     NewExtends = ExtendFields ++ ExtendedFieldsOut,
     NewCollected = Collected#collected{msg=lists:keyreplace(ListName,1,CollectedMsg,{ListName,FieldsOut,NewExtends})},
     collect_full_messages(Tail, NewCollected);
-%% Skip anything we don't understand
-collect_full_messages([Skip|Tail], Acc) ->
+collect_full_messages([Skip|Tail], Acc) -> %% Skip anything we don't understand
     error_logger:warning_report(["Unkown, skipping",{skip,Skip}]), 
     collect_full_messages(Tail, Acc);
 collect_full_messages([], Collected) ->
@@ -632,8 +623,6 @@ collect_full_messages([], Collected) ->
 type_path_to_type (TypePath) ->
     string:join (lists:reverse (TypePath), "_").
 
-
-%% @hidden
 is_enum_type(_Type, [], _Enums) ->
     false;
 is_enum_type(Type, [TypePath|Paths], Enums) ->
@@ -650,4 +639,102 @@ is_enum_type(Type, Enums) ->
 	    false;
 	{value,_} ->
 	    true
+    end.
+
+resolve_types (Data, Enums) -> 
+    resolve_types (Data, Data, Enums, []).
+
+resolve_types ([{TypePath, Fields,Extended} | Tail], AllPaths, Enums, Acc) ->
+    ExpandTypes = fun (Input, TmpAcc) ->
+			case Input of
+			    {Index, Rules, Type, Identifier, Other} ->
+				case is_scalar_type (Type) of
+				    true -> [Input | TmpAcc];
+				    false ->
+					PossiblePaths=possible_paths(TypePath,Type),
+					RealPath=real_type_path(AllPaths,Enums,Type,PossiblePaths),
+					[{Index, Rules,
+					  type_path_to_type(RealPath),
+					  Identifier, Other} | TmpAcc]
+				end;
+			    _ -> TmpAcc
+			end
+		end,
+    FieldsOut = lists:foldl(ExpandTypes, [], Fields),
+    ExtendedOut = case Extended of
+		      disallowed ->
+			  disallowed;
+		      _ ->
+			  MidExtendOut = lists:foldl(ExpandTypes, [], Extended),
+			  lists:reverse(MidExtendOut)
+		  end,
+    resolve_types (Tail, AllPaths, Enums,
+        [{type_path_to_type(TypePath),
+        lists:reverse (FieldsOut), ExtendedOut } | Acc]);
+resolve_types ([], _, _, Acc) ->
+    Acc.
+
+real_type_path(AllPaths, Enums, Type, PossiblePaths) ->
+    case find_type (PossiblePaths, AllPaths) of
+	false ->
+	    case is_enum_type(Type, PossiblePaths, Enums) of
+		{true,EnumTypePath} ->
+		    EnumTypePath;
+		false ->
+		    throw ({unknown_type, Type})
+	    end;
+	ResultTypePath ->
+	    ResultTypePath
+    end.
+
+possible_paths(TypePath, Type) ->
+    case string:tokens (Type,".") of
+	[Type] ->
+	    all_possible_type_paths (Type, TypePath);
+	FullPath ->
+	    % handle types of the form Foo.Bar which are absolute,
+	    % so we just convert to a type path and check it.
+	    [lists:reverse (FullPath)]
+    end.
+
+is_scalar_type ("double") -> true;
+is_scalar_type ("float") -> true;
+is_scalar_type ("int32") -> true;
+is_scalar_type ("int64") -> true;
+is_scalar_type ("uint32") -> true;
+is_scalar_type ("uint64") -> true;
+is_scalar_type ("sint32") -> true;
+is_scalar_type ("sint64") -> true;
+is_scalar_type ("fixed32") -> true;
+is_scalar_type ("fixed64") -> true;
+is_scalar_type ("sfixed32") -> true;
+is_scalar_type ("sfixed64") -> true;
+is_scalar_type ("bool") -> true;
+is_scalar_type ("string") -> true;
+is_scalar_type ("bytes") -> true;
+is_scalar_type (_) -> false.
+
+sublists(List) when is_list(List) ->
+    sublists(List,[]).
+
+sublists([],Acc) ->
+    [ [] | Acc ];
+sublists(List,Acc) ->
+    sublists (tl (List), [ List | Acc ]).
+
+all_possible_type_paths (Type, TypePath) ->
+    lists:foldl (fun (TypeSuffix, AccIn) ->
+			 [[Type | TypeSuffix] | AccIn]
+		 end,
+		 [],
+		 sublists (TypePath)).
+
+find_type ([], _KnownTypes) ->
+    false;
+find_type ([Type | TailTypes], KnownTypes) ->
+    case lists:keysearch (Type, 1, KnownTypes) of
+        false ->
+            find_type (TailTypes, KnownTypes);
+        {value, {RealType, _, _}} ->
+            RealType
     end.

@@ -30,10 +30,6 @@
 
 -export([scan_file/1, scan_file/2, scan_string/2, scan_string/3, 
 	 generate_source/1, generate_source/2]).
-
--export([parse_file/1]).
-
--export([parse_imports/2]).
 -endif.
 
 -record(collected,{enum=[], msg=[], extensions=[]}).
@@ -145,57 +141,6 @@ parse_file(InFile,Acc) ->
     end.
 
 %% @hidden
-resolve_types (Data, Enums) -> resolve_types (Data, Data, Enums, []).
-resolve_types ([{TypePath, Fields,Extended} | Tail], AllPaths, Enums, Acc) ->
-    FolderFun = fun (Input, TmpAcc) ->
-			case Input of
-			    {Index, Rules, Type, Identifier, Other} ->
-				case is_scalar_type (Type) of
-				    true -> [Input | TmpAcc];
-				    false ->
-					PossiblePaths =
-					    case string:tokens (Type,".") of
-						[Type] ->
-						    all_possible_type_paths (Type, TypePath);
-						FullPath ->
-						% handle types of the form Foo.Bar which are absolute,
-						% so we just convert to a type path and check it.
-						    [lists:reverse (FullPath)]
-					    end,
-					RealPath =
-					    case find_type (PossiblePaths, AllPaths) of
-						false ->
-						    case protobuffs_compile_lib:is_enum_type(Type, PossiblePaths, Enums) of
-							{true,EnumType} ->
-							    EnumType;
-							false ->
-							    throw (["Unknown Type ", Type])
-						    end;
-						ResultType ->
-						    ResultType
-					    end,
-                            [{Index, Rules,
-                            protobuffs_compile_lib:type_path_to_type(RealPath),
-                            Identifier, Other} | TmpAcc]
-				end;
-			    _ -> TmpAcc
-			end
-		end,
-    FieldsOut = lists:foldl(FolderFun, [], Fields),
-    ExtendedOut = case Extended of
-		      disallowed ->
-			  disallowed;
-		      _ ->
-			  MidExtendOut = lists:foldl(FolderFun, [], Extended),
-			  lists:reverse(MidExtendOut)
-		  end,
-    resolve_types (Tail, AllPaths, Enums,
-        [{protobuffs_compile_lib:type_path_to_type(TypePath),
-        lists:reverse (FieldsOut), ExtendedOut } | Acc]);
-resolve_types ([], _, _, Acc) ->
-    Acc.
-
-%% @hidden
 generate_field_definitions(Fields) ->
     generate_field_definitions(Fields, []).
 
@@ -212,60 +157,15 @@ generate_field_definitions([{Name, _, Default} | Tail], Acc) ->
     Head = lists:flatten(io_lib:format("~s = ~p", [Name, Default])),
     generate_field_definitions(Tail, [Head | Acc]).
 
-%% @hidden
-is_scalar_type ("double") -> true;
-is_scalar_type ("float") -> true;
-is_scalar_type ("int32") -> true;
-is_scalar_type ("int64") -> true;
-is_scalar_type ("uint32") -> true;
-is_scalar_type ("uint64") -> true;
-is_scalar_type ("sint32") -> true;
-is_scalar_type ("sint64") -> true;
-is_scalar_type ("fixed32") -> true;
-is_scalar_type ("fixed64") -> true;
-is_scalar_type ("sfixed32") -> true;
-is_scalar_type ("sfixed64") -> true;
-is_scalar_type ("bool") -> true;
-is_scalar_type ("string") -> true;
-is_scalar_type ("bytes") -> true;
-is_scalar_type (_) -> false.
-
-%% @hidden
-sublists(List) when is_list(List) ->
-    sublists(List,[]).
-sublists([],Acc) ->
-    [ [] | Acc ];
-sublists(List,Acc) ->
-    sublists (tl (List), [ List | Acc ]).
-
-%% @hidden
-all_possible_type_paths (Type, TypePath) ->
-    lists:foldl (fun (TypeSuffix, AccIn) ->
-			 [[Type | TypeSuffix] | AccIn]
-		 end,
-		 [],
-		 sublists (TypePath)).
-
-%% @hidden
-find_type ([], _KnownTypes) ->
-    false;
-find_type ([Type | TailTypes], KnownTypes) ->
-    case lists:keysearch (Type, 1, KnownTypes) of
-        false ->
-            find_type (TailTypes, KnownTypes);
-        {value, {RealType, _, _}} ->
-            RealType
-    end.
-
 generate_output(Options, Basename, String, OutputFunction) ->
-    {ok, FirstParsed} = protobuffs_compile_lib:parse_string(String),
+    {ok, FirstParsed} = parse_string(String),
     ImportPaths = ["./", "src/"
 		   | proplists:get_value(imports_dir, Options, [])],
     Parsed = parse_imports(FirstParsed,
                            ImportPaths),
     Collected = protobuffs_compile_lib:collect_full_messages(Parsed),
-    Messages = resolve_types(Collected#collected.msg,
-                             Collected#collected.enum),
+    Messages = protobuffs_compile_lib:resolve_types(Collected#collected.msg,
+                                                    Collected#collected.enum),
     OutputFunction(Basename, 
 		   Messages, 
 		   Collected#collected.enum,
@@ -328,7 +228,7 @@ parse_imports([{import, File} = Head | Tail], Path, Acc) ->
 	{ok, F, Fullname} ->
 	    file:close(F),
 	    {ok,String} = parse_file(Fullname),
-	    {ok,FirstParsed} = protobuffs_compile_lib:parse_string(String),
+	    {ok,FirstParsed} = parse_string(String),
 	    Parsed = lists:append(FirstParsed, Tail),
 	    parse_imports(Parsed, Path, [Head | Acc]);
 	{error, Error} ->
@@ -342,3 +242,8 @@ parse_imports([{import, File} = Head | Tail], Path, Acc) ->
     end;
 parse_imports([Head | Tail], Path, Acc) ->
     parse_imports(Tail, Path, [Head | Acc]).
+
+
+-spec parse_string(string()) -> {'error', _} | {'ok', _}.
+parse_string(String) ->
+    protobuffs_parser:parse(String).

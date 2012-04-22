@@ -22,15 +22,14 @@
 %    ?assertEqual([],
 %		 (proper:check_specs(protobuffs_compile, [long_result]))).
 
-proper_lib_specs_test() ->
-    error_logger:tty(false),
-    ?assertEqual([],
-		 (proper:check_specs(protobuffs_compile_lib, [long_result]))).
+%proper_lib_specs_test() ->
+%    error_logger:tty(false),
+%    ?assertEqual([],
+%		 (proper:check_specs(protobuffs_compile_lib, [long_result]))).
 
-proper_module_test() ->
-    error_logger:tty(false),
-    ?assertEqual([],
-		  proper:module(?MODULE, [long_result])).
+%proper_module_test() ->
+%    error_logger:tty(false),
+%    ?assertEqual([], proper:module(?MODULE, [long_result])).
 
 filter_forms_test_() ->
     [test_filter_attribute_file(),
@@ -53,7 +52,10 @@ filter_forms_test_() ->
      test_function_get_extension(),
      test_function_set_extension(),
      test_function_collect_full_messages(),
-     test_function_is_enum_type()].
+     test_function_is_enum_type(),
+     test_function_set_line_number(),
+     test_function_resolve_types(),
+     test_function_is_scalar_type()].
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%% SETUP FUNCTIONS %%%
@@ -766,14 +768,65 @@ test_function_collect_full_messages() ->
 				    {extend, ["ExtendedName"],[{15,a,b,"FieldName",d}]}])),
      ?_assertThrow(out_of_range, protobuffs_compile_lib:collect_full_messages(
 				   [{message, ["ExtendedName"],[{extensions, 19000, 19100}]},
-				    {extend, ["ExtendedName"],[{19050,a,b,"FieldName",d}]}]))].
+				    {extend, ["ExtendedName"],[{19050,a,b,"FieldName",d}]}])),
+     ?_assertEqual({collected,[],[],[]}, protobuffs_compile_lib:collect_full_messages(
+				   [dummy]))].
 
 test_function_is_enum_type() ->
     [?_assertEqual(false,protobuffs_compile_lib:is_enum_type(dummy,[],dummy)),
      ?_assertEqual({true,["Enum"]},protobuffs_compile_lib:is_enum_type("Enum",[["Enum"]],[{dummy,"Enum"}])),
      ?_assertEqual({true,["Enum"]},protobuffs_compile_lib:is_enum_type("Enum",[["Test","Message"],["Enum"]],[{dummy,"Enum"}])),
      ?_assertEqual({true,["Enum","Message"]},protobuffs_compile_lib:is_enum_type("Message_Enum",[["Enum","Message"],["Test"]],[{dummy,"Message_Enum"}]))].
+
+test_function_set_line_number() ->
+    [?_assertEqual({dummy,1}, protobuffs_compile_lib:set_line_number(1,{dummy,2})),
+     ?_assertEqual({dummy,1,[list]}, protobuffs_compile_lib:set_line_number(1,{dummy,2,[list]})),
+     ?_assertEqual({dummy,1,{tuple}}, protobuffs_compile_lib:set_line_number(1,{dummy,2,{tuple}})),
+     ?_assertEqual({dummy,1,1}, protobuffs_compile_lib:set_line_number(1,{dummy,2,1})),
+     ?_assertEqual({dummy,1,{dummy,1},{dummy,1}}, 
+		   protobuffs_compile_lib:set_line_number(1,{dummy,2,{dummy,2},{dummy,2}})),
+     ?_assertEqual({dummy,1,atom}, protobuffs_compile_lib:set_line_number(1,{dummy,2,atom}))].
+
+test_function_resolve_types() ->
+    [?_assertEqual([],protobuffs_compile_lib:resolve_types ([],[])),
+     ?_assertEqual([{"Type", [{1, rules, "Type", "Identifier", "Other"}],[]}],
+		   protobuffs_compile_lib:resolve_types ([{["Type"], [{1, rules, "Type", "Identifier", "Other"}],[]}],[])),
+     ?_assertEqual([{"Message_Type", [{1, rules, "double", "Identifier", "Other"}],[]}],
+		   protobuffs_compile_lib:resolve_types ([{["Type","Message"], [{1, rules, "double", "Identifier", "Other"}],[]}],[])),
+     ?_assertEqual([{"Type", [],[]}],
+		   protobuffs_compile_lib:resolve_types ([{["Type"], [dummy],[]}],[])),
+     ?_assertEqual([{"Type", [{1, rules, "Type", "Identifier", "Other"}],disallowed}],
+		   protobuffs_compile_lib:resolve_types ([{["Type"], [{1, rules, "Type", "Identifier", "Other"}],disallowed}],[])),
+     ?_assertEqual([{"Message_Type", [{1, rules, "Enum", "Identifier", "Other"}],disallowed}],
+		   protobuffs_compile_lib:resolve_types ([{["Message_Type"], 
+							   [{1, rules, "Enum", "Identifier", "Other"}],disallowed}],
+							 [{1,"Enum"}])),
+     ?_assertEqual([{"Type", [{1, rules, "Message_Enum", "Identifier", "Other"}],[]}],
+		   protobuffs_compile_lib:resolve_types ([{["Type"], 
+							   [{1, rules, "Message.Enum", "Identifier", "Other"}],[]}],
+							 [{1,"Message_Enum"}])),
+     ?_assertThrow({unknown_type, "Enum"},
+		   protobuffs_compile_lib:resolve_types ([{["Type","Message"], 
+							   [{1, rules, "Enum", "Identifier", "Other"}],disallowed}],
+							 [dummy]))].
     
+test_function_is_scalar_type() ->
+    [?_assertEqual(true,protobuffs_compile_lib:is_scalar_type("double")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("float")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("int32")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("int64")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("uint32")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("uint64")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("sint32")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("sint64")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("fixed32")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("fixed64")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("sfixed32")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("sfixed64")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("bool")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("string")),
+     ?_assertEqual(true,protobuffs_compile_lib:is_scalar_type ("bytes")),
+     ?_assertEqual(false,protobuffs_compile_lib:is_scalar_type ("dymmy"))].
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
