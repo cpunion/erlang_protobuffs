@@ -37,7 +37,7 @@
 %%--------------------------------------------------------------------
 %% @doc Generats a built .beam file and header file .hrl
 %%--------------------------------------------------------------------
--spec scan_file(ProtoFile :: string()) ->
+-spec scan_file(ProtoFile :: string() | atom()) ->
 		       ok | {error, _}.
 scan_file(ProtoFile) ->
     scan_file(ProtoFile,[]).
@@ -72,13 +72,10 @@ scan_string(String,Basename,Options) ->
 %%--------------------------------------------------------------------
 %% @doc Generats a source .erl file and header file .hrl
 %%--------------------------------------------------------------------
--spec generate_source(ProtoFile :: string()) ->
+-spec generate_source(ProtoFile :: string() | atom() ) ->
 			     ok | {error, _}.
-generate_source(ProtoFile) when is_atom(ProtoFile) ->
-    generate_source(atom_to_list(ProtoFile),[]);
 generate_source(ProtoFile) ->
-    Basename = filename:basename(ProtoFile, ".proto"),
-    generate_source(Basename,[]).
+    generate_source(ProtoFile,[]).
 
 %%--------------------------------------------------------------------
 %% @doc Generats a source .erl file and header file .hrl
@@ -86,13 +83,16 @@ generate_source(ProtoFile) ->
 %%                                  output_src_dir,
 %%                                  imports_dir
 %%--------------------------------------------------------------------
--spec generate_source(ProtoFile :: string(), Options :: list()) ->
+-spec generate_source(ProtoFile :: string() | atom(), Options :: list()) ->
 			     ok | {error, _}.
 generate_source(ProtoFile,Options) when is_list (ProtoFile) ->
-    Basename = ProtoFile ++ "_pb",
+    Basename = filename:basename(ProtoFile, ".proto") ++ "_pb",
     {ok,String} = parse_file(ProtoFile),
-    generate_output(Options, Basename, String,
-                    fun output_source/4).
+    generate_output(Options, Basename, String, fun output_source/4);
+generate_source(ProtoFile,Options) when is_atom (ProtoFile) ->
+    Basename = atom_to_list(ProtoFile) ++ "_pb",
+    {ok,String} = parse_file(ProtoFile),
+    generate_output(Options, Basename, String, fun output_source/4).
 
 %% @hidden
 output(Basename, Messages, Enums, Options) ->
@@ -111,8 +111,7 @@ output(Basename, Messages, Enums, Options) ->
 %% @hidden
 output_source (Basename, Messages, Enums, Options) ->
     create_header_file(Basename, Messages, Options),
-    Forms1 = create_forms(Basename, Messages, Enums,
-                          undefined),
+    Forms1 = create_forms(Basename, Messages, Enums, undefined),
     case proplists:get_value(output_src_dir,Options) of
 	undefined ->
 	    SrcFile = Basename ++ ".erl";

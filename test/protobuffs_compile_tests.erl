@@ -259,12 +259,15 @@ test_filter_function_iolist() ->
     Extends = ignored,
     Name = "name",
     Functions = [{1,optional,"int32","field1",none},
-		 {2,required,"int32","field2",none}],
+		 {2,required,"int32","field2",none},
+		 {3,optional,"string","field3","Test"},
+		 {4,optional,"float","field4",1.0},
+		 {5,optional,"int","field5",1}],
     Messages = [{Name,Functions,ignored}],
     Enums = ignored,
     Basename = ignored,
 
-    PackFmt = "pack(~w, ~w, with_default(Record#~s.~s, ~w), ~s, [])",
+    PackFmt = "pack(~w, ~w, with_default(Record#~s.~s, ~p), ~s, [])",
     IolistFmt = "iolist(~s, Record) -> [~s].",
 
     Pack = string_format(PackFmt,

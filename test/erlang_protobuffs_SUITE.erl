@@ -99,7 +99,7 @@ groups() -> [].
 %%--------------------------------------------------------------------
 all() ->
     [protobuffs_test_case, protobuffs_packed_test_case,
-     test_proto_files, test_extendable_messages].
+     test_proto_files, test_proto_files_source, test_extendable_messages].
 
 %%--------------------------------------------------------------------
 %% @spec TestCase() -> Info
@@ -111,6 +111,9 @@ protobuffs_test_case() -> [].
 protobuffs_packed_test_case() -> [].
 
 test_proto_files() -> [].
+
+test_proto_files_source() -> [].
+    
 
 %%--------------------------------------------------------------------
 %% @spec TestCase(Config0) ->
@@ -134,8 +137,10 @@ protobuffs_packed_test_case(Config) ->
 test_proto_files(Config) ->
     DataDir = (?config(data_dir, Config)),
     NumTests = (?config(num_tests, Config)),
+    PrivDir = (?config(priv_dir, Config)),
     ProtoFiles = filelib:wildcard(filename:join([DataDir, "proto", "*.proto"])),
-    ScanProtoFiles = [Filename || Filename <- ProtoFiles , scan_file(DataDir, Filename)],
+    ScanProtoFiles = [Filename || Filename <- ProtoFiles , scan_file(DataDir, PrivDir, Filename)],
+    test_server:format("~n===Out ~p===~n", [?config(priv_dir,Config)]),
     Tests = lists:map(fun(Filename) -> 
 			      list_to_atom("proper_protobuffs_" ++ 
 					       filename:basename(Filename,".proto")) 
@@ -149,16 +154,24 @@ test_proto_files(Config) ->
 	_ -> ct:fail("One or more extension tests failed")
     end.
 
+test_proto_files_source(Config) ->
+    DataDir = (?config(data_dir, Config)),
+    NumTests = (?config(num_tests, Config)),
+    PrivDir = (?config(priv_dir, Config)),
+    ProtoFiles = filelib:wildcard(filename:join([DataDir, "proto", "*.proto"])),
+    lists:foreach(fun(Filename)->generate_source(DataDir, PrivDir, Filename)end, ProtoFiles).
+
 test_extendable_messages(Config) ->
     DataDir = (?config(data_dir, Config)),
     NumTests = (?config(num_tests, Config)),
+    PrivDir = (?config(priv_dir, Config)),
     ProtoFiles = lists:map(fun(File) -> 
 				   Filename = filename:join([DataDir, 
 							     "proto", 
 							     File]) 
 			   end, 
 			   ["extend.proto", "extensions.proto"]),
-    ScanProtoFiles = [scan_file(DataDir,Filename)
+    ScanProtoFiles = [scan_file(DataDir,PrivDir,Filename)
 		      || Filename <- ProtoFiles],
     Tests = [proper_protobuffs_extend_degraded,
 	     proper_protobuffs_extend_assign,
@@ -213,16 +226,40 @@ run_test(NumTests, Testname, Acc) ->
 	    false
     end.
 
-scan_file(DataDir, Filename) ->
+scan_file(DataDir, PrivDir, Filename) ->
     Path = filename:absname(Filename),
     Options = [{imports_dir,
 		[filename:join([DataDir, "proto"]),
-		 filename:join([DataDir, "proto", "import"])]}],
+		 filename:join([DataDir, "proto", "import"])]},
+	       {output_ebin_dir,PrivDir},
+	       {output_include_dir,PrivDir}],
+    code:add_patha(PrivDir),
     try
 	ok == protobuffs_compile:scan_file(Path, Options)
     catch out_of_range -> 
-	    TestName = filename:basename(Filename,".proto"),
-	    test_server:format("~n===Testcase ~p===~n", [TestName]),
-	    test_server:format("Test ~p:  thrown 'out_of_range' exeption ok?~n~n~n", [TestName]),
+	    case filename:basename(Filename,".proto") of
+		"extend_in_reserved_range" ->
+		    test_server:format("~n===Testcase extend_in_reserved_range===~n"),
+		    test_server:format("Test extend_in_reserved_range:  thrown 'out_of_range' exeption ok~n~n~n");
+		"extend_out_of_range" ->
+		    test_server:format("~n===Testcase extend_out_of_range===~n"),
+		    test_server:format("Test extend_out_of_range:  thrown 'out_of_range' exeption ok~n~n~n");
+		_ ->
+		    ct:fail("Unexpected test thrown out_of_range exeption")
+	    end,
 	    false
+    end.
+
+generate_source(DataDir, PrivDir, Filename) ->
+    Path = filename:absname(Filename),
+    Options = [{imports_dir,
+		[filename:join([DataDir, "proto"]),
+		 filename:join([DataDir, "proto", "import"])]},
+	       {output_src_dir,PrivDir},
+	       {output_include_dir,PrivDir}],
+    try
+	test_server:format("Generating source file ~p",[Path]),
+	protobuffs_compile:generate_source(Path, Options)
+    catch out_of_range -> 
+	    ok
     end.

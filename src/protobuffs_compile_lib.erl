@@ -323,9 +323,14 @@ filter_iolist_clause({MsgName, Fields, _Extends}, {clause,_,Args,Guards,[{cons,_
     Cons = lists:foldl(fun({FNum,Tag,SType,SName,Default},Acc) ->
 			       R1 = replace_atom(Call,pikachu,atomize(MsgName)),
 			       R2 = replace_atom(R1,abc,atomize(SName)),
-			       R3 = replace_atom(R2,none,Default),
-			       R4 = replace_atom(R3,string,atomize(SType)),
-			       R5 = replace_atom(R4,{integer,L,1},{integer,L,FNum}),
+			       R3 = replace_atom(R2,{integer,L,1},{integer,L,FNum}),
+			       R4 = if 
+					is_atom(Default) -> replace_atom(R3,none,Default);
+					is_list(Default) -> replace_atom(R3,{atom,L,none},{string,L,Default});
+					is_float(Default) -> replace_atom(R3,{atom,L,none},{float,L,Default});
+					is_integer(Default) -> replace_atom(R3,{atom,L,none},{integer,L,Default})
+				    end,
+			       R5 = replace_atom(R4,string,atomize(SType)),
 			       R6 = replace_atom(R5,required,Tag),
 			       {cons,L,R6,Acc}
 		       end, {nil,L}, F1),
@@ -437,8 +442,7 @@ filter_to_record_clause({MsgName, _, Extends},
 			{clause,L,[Param1,Param2],Guards,[Fold,DecodeExtends]}) ->
     Fold1 = replace_atom(Fold, pikachu, atomize(MsgName)),
     ReturnLine = case Extends of
-		     disallowed ->
-			 {var,L,'Record1'};
+		     disallowed ->			 {var,L,'Record1'};
 		     _ ->
 			 DecodeExtends
 		 end,
