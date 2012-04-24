@@ -52,11 +52,6 @@ Person message into records.
 How cool is that? From .proto files, we create modules that export encode and
 decode functions for the messages defined.
 
-## CAVEATS
-
-Support for parsing proto files and creating code from it is volatile and
-should be considered alpha software at best. Please do not use this in production.
-
 ## no_debug_info
 
 The protobuffs_compile module relies on the pokemon_pb module being compiled
@@ -67,13 +62,19 @@ module.
 
 ## Building with rebar
 To compile
-    %>./rebar compile
+    &>./rebar compile
 
 To run all tests
-    %>./rebar eunit
-    %>./rebar ct
+    &>./rebar eunit
+    &>./rebar ct
 
 Se rebar doc for more information.
+
+A simple makefile is also included
+    &>make
+    &>make test
+    &>make eunit
+    &>make ct
 
 ## CREDITS
 
@@ -82,5 +83,7 @@ Some of the protobuffs.erl module came from code written by Brian Buchanan.
 Some of the protobuffs\_compile.erl module came from code written by Tim
 Fletcher.
 
-The rest of it and it's test suite was written by Nick Gerakines. Major
+Original written by Nick Gerakines. Major
 contributions have been made by Jacob Vorreuter.
+
+Lexx/Yecc parser, and most of the test cases by David Åberg  
