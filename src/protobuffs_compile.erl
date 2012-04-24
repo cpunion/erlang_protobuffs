@@ -97,7 +97,7 @@ generate_source(ProtoFile,Options) when is_atom (ProtoFile) ->
 %% @hidden
 output(Basename, Messages, Enums, Options) ->
     create_header_file(Basename, Messages, Options),
-    Forms = create_forms(Basename, Messages, Enums, undefined),
+    Forms = create_forms(Basename, Messages, Enums),
     {ok, _, Bytes, _Warnings} = protobuffs_io:compile_forms(Forms, proplists:get_value(compile_flags,Options,[])),
     case proplists:get_value(output_ebin_dir,Options) of
 	undefined ->
@@ -111,7 +111,7 @@ output(Basename, Messages, Enums, Options) ->
 %% @hidden
 output_source (Basename, Messages, Enums, Options) ->
     create_header_file(Basename, Messages, Options),
-    Forms1 = create_forms(Basename, Messages, Enums, undefined),
+    Forms1 = create_forms(Basename, Messages, Enums),
     case proplists:get_value(output_src_dir,Options) of
 	undefined ->
 	    SrcFile = Basename ++ ".erl";
@@ -125,7 +125,7 @@ output_source (Basename, Messages, Enums, Options) ->
 parse_file(FileName) ->
     {ok, InFile} = protobuffs_io:open(FileName, [read]),
     String = parse_file(InFile,[]),
-    file:close(InFile),
+    ok = file:close(InFile),
     {ok,String}.
 
 %% @hidden
@@ -170,7 +170,7 @@ generate_output(Options, Basename, String, OutputFunction) ->
 		   Collected#collected.enum,
                    Options).
 
-create_forms(Basename, Messages, Enums, Options) ->
+create_forms(Basename, Messages, Enums) ->
     PokemonBeamFile = code:where_is_file("pokemon_pb.beam"),
     {ok,
      {_,
@@ -190,31 +190,25 @@ create_header_file(Basename, Messages, Options) ->
     error_logger:info_msg("Writing header file to ~p~n",
                           [HeaderFile]),
     {ok, FileRef} = protobuffs_io:open(HeaderFile, [write]),
-    [begin
-	 OutFields = [{string:to_lower(A), Optional, Default}
-		      || {_, Optional, _, A, Default}
-			     <- lists:keysort(1, Fields)],
-	 protobuffs_io:format(FileRef, "-record(~s, {~n    ",
-			      [string:to_lower(Name)]),
-	 WriteFields0 = generate_field_definitions(OutFields),
-	 WriteFields = case Extends of
-			   disallowed -> WriteFields0;
-			   _ ->
-			       ExtenStr = case OutFields of
-					      [] -> "'$extensions' = dict:new()";
-					      _ -> "'$extensions' = dict:new()"
-					  end,
-			       WriteFields0 ++ [ExtenStr]
-		       end,
-	 FormatString = string:join(["~s"
-				     || _ <- lists:seq(1, length(WriteFields))],
-				    ",~n    "),
-	 protobuffs_io:format(FileRef, FormatString,
-			      WriteFields),
-	 protobuffs_io:format(FileRef, "~n}).~n~n", [])
-     end
-     || {Name, Fields, Extends} <- Messages],
+    lists:foreach(fun({Name, Fields, Extends}) -> write_to_file(FileRef, Name, Fields, Extends) end, Messages),
     ok = protobuffs_io:close(FileRef).
+
+write_to_file(FileRef, Name, Fields, Extends) ->
+    OutFields = [{string:to_lower(A), Optional, Default} || {_, Optional, _, A, Default} <- lists:keysort(1, Fields)],
+    protobuffs_io:format(FileRef, "-record(~s, {~n    ", [string:to_lower(Name)]),
+    WriteFields0 = generate_field_definitions(OutFields),
+    WriteFields = case Extends of
+		      disallowed -> WriteFields0;
+		      _ ->
+			  ExtenStr = case OutFields of
+					 [] -> "'$extensions' = dict:new()";
+					 _ -> "'$extensions' = dict:new()"
+				     end,
+			  WriteFields0 ++ [ExtenStr]
+		  end,
+    FormatString = string:join(["~s" || _ <- lists:seq(1, length(WriteFields))],",~n    "),
+    protobuffs_io:format(FileRef, FormatString, WriteFields),
+    protobuffs_io:format(FileRef, "~n}).~n~n", []).
 
 
 parse_imports(Parsed, Path) ->
@@ -225,18 +219,16 @@ parse_imports([], _Path, Acc) ->
 parse_imports([{import, File} = Head | Tail], Path, Acc) ->
     case protobuffs_io:path_open(Path, File, [read]) of
 	{ok, F, Fullname} ->
-	    file:close(F),
+	    ok = file:close(F),
 	    {ok,String} = parse_file(Fullname),
 	    {ok,FirstParsed} = parse_string(String),
 	    Parsed = lists:append(FirstParsed, Tail),
 	    parse_imports(Parsed, Path, [Head | Acc]);
 	{error, Error} ->
-	    error_logger:error_report([
-				       "Could not do import",
+	    error_logger:error_report(["Could not do import",
 				       {import, File},
 				       {error, Error},
-				       {path, Path}
-				      ]),
+				       {path, Path}]),
 	    parse_imports(Tail, Path, [Head | Acc])
     end;
 parse_imports([Head | Tail], Path, Acc) ->
