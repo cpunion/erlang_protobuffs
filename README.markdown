@@ -62,19 +62,27 @@ module.
 
 ## Building with rebar
 To compile
+
     &>./rebar compile
 
 To run all tests
+
     &>./rebar eunit
+
     &>./rebar ct
 
 Se rebar doc for more information.
 
 A simple makefile is also included
+
     &>make
+
     &>make test
+
     &>make eunit
+
     &>make ct
+
 
 ## CREDITS
 
@@ -86,4 +94,4 @@ Fletcher.
 Original written by Nick Gerakines. Major
 contributions have been made by Jacob Vorreuter.
 
-Lexx/Yecc parser, and most of the test cases by David Åberg  
+Leex/Yecc parser, and most of the test cases by David Åberg  

@@ -26,10 +26,6 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(protobuffs_compile_lib).
 
-
-
--module(protobuffs_compile_lib).
-
 -ifdef(TEST).
 -compile(export_all).
 -else.
