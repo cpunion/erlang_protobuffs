@@ -52,6 +52,13 @@ Person message into records.
 How cool is that? From .proto files, we create modules that export encode and
 decode functions for the messages defined.
 
+## script
+
+It't also posible to create a escript "bin/protoc-erl" this self contained script 
+generates a source code (.erl) file and a header (.hrl) file.
+
+     &>./protoc-erl path_to_proto_file
+
 ## no_debug_info
 
 The protobuffs_compile module relies on the pokemon_pb module being compiled
@@ -83,6 +90,7 @@ A simple makefile is also included
 
     &>make ct
 
+    &>make escriptize
 
 ## CREDITS
 

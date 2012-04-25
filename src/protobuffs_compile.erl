@@ -171,11 +171,11 @@ generate_output(Options, Basename, String, OutputFunction) ->
                    Options).
 
 create_forms(Basename, Messages, Enums) ->
-    PokemonBeamFile = code:where_is_file("pokemon_pb.beam"),
+    {_,Binary,_} = code:get_object_code(pokemon_pb),
     {ok,
      {_,
       [{abstract_code,
-        {_, Forms}}]}} = beam_lib:chunks(PokemonBeamFile,
+        {_, Forms}}]}} = beam_lib:chunks(Binary,
                                          [abstract_code]),
     protobuffs_compile_lib:filter_forms(Messages, Enums, Forms, Basename, []).
 
