@@ -29,9 +29,8 @@
 -ifdef(TEST).
 -compile(export_all).
 -else.
--export([filter_forms/5]).
--export([collect_full_messages/1]).
--export([resolve_types/2]).
+-export([filter_forms/5, collect_full_messages/1, resolve_types/2]).
+-export([generate_field_definitions/1]).
 -endif.
 
 
@@ -768,3 +767,18 @@ find_type ([Type | TailTypes], KnownTypes) ->
         {value, {RealType, _, _}} ->
             RealType
     end.
+
+generate_field_definitions(Fields) ->
+    generate_field_definitions(Fields, []).
+
+generate_field_definitions([], Acc) ->
+    lists:reverse(Acc);
+generate_field_definitions([{Name, required, _} | Tail], Acc) ->
+    Head = lists:flatten(io_lib:format("~s = erlang:error({required, ~s})", [Name, Name])),
+    generate_field_definitions(Tail, [Head | Acc]);
+generate_field_definitions([{Name, _, none} | Tail], Acc) ->
+    Head = lists:flatten(io_lib:format("~s", [Name])),
+    generate_field_definitions(Tail, [Head | Acc]);
+generate_field_definitions([{Name, _, Default} | Tail], Acc) ->
+    Head = lists:flatten(io_lib:format("~s = ~p", [Name, Default])),
+    generate_field_definitions(Tail, [Head | Acc]).

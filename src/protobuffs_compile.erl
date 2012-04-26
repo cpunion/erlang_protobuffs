@@ -98,7 +98,7 @@ generate_source(ProtoFile,Options) when is_atom (ProtoFile) ->
 output(Basename, Messages, Enums, Options) ->
     create_header_file(Basename, Messages, Options),
     Forms = create_forms(Basename, Messages, Enums),
-    {ok, _, Bytes, _Warnings} = protobuffs_io:compile_forms(Forms, proplists:get_value(compile_flags,Options,[])),
+    {ok, _, Bytes, _Warnings} = compile_forms(Forms, proplists:get_value(compile_flags,Options,[])),
     case proplists:get_value(output_ebin_dir,Options) of
 	undefined ->
 	    BeamFile = Basename ++ ".beam";
@@ -139,23 +139,6 @@ parse_file(InFile,Acc) ->
             Acc
     end.
 
-%% @hidden
-generate_field_definitions(Fields) ->
-    generate_field_definitions(Fields, []).
-
-%% @hidden
-generate_field_definitions([], Acc) ->
-    lists:reverse(Acc);
-generate_field_definitions([{Name, required, _} | Tail], Acc) ->
-    Head = lists:flatten(io_lib:format("~s = erlang:error({required, ~s})", [Name, Name])),
-    generate_field_definitions(Tail, [Head | Acc]);
-generate_field_definitions([{Name, _, none} | Tail], Acc) ->
-    Head = lists:flatten(io_lib:format("~s", [Name])),
-    generate_field_definitions(Tail, [Head | Acc]);
-generate_field_definitions([{Name, _, Default} | Tail], Acc) ->
-    Head = lists:flatten(io_lib:format("~s = ~p", [Name, Default])),
-    generate_field_definitions(Tail, [Head | Acc]).
-
 generate_output(Options, Basename, String, OutputFunction) ->
     {ok, FirstParsed} = parse_string(String),
     ImportPaths = ["./", "src/"
@@ -172,11 +155,7 @@ generate_output(Options, Basename, String, OutputFunction) ->
 
 create_forms(Basename, Messages, Enums) ->
     {_,Binary,_} = code:get_object_code(pokemon_pb),
-    {ok,
-     {_,
-      [{abstract_code,
-        {_, Forms}}]}} = beam_lib:chunks(Binary,
-                                         [abstract_code]),
+    {ok,{_,[{abstract_code,{_, Forms}}]}} = beam_lib:chunks(Binary,[abstract_code]),
     protobuffs_compile_lib:filter_forms(Messages, Enums, Forms, Basename, []).
 
 
@@ -194,9 +173,9 @@ create_header_file(Basename, Messages, Options) ->
     ok = protobuffs_io:close(FileRef).
 
 write_to_file(FileRef, Name, Fields, Extends) ->
-    OutFields = [{string:to_lower(A), Optional, Default} || {_, Optional, _, A, Default} <- lists:keysort(1, Fields)],
+    OutFields = [{string:to_lower(A),Optional,Default} || {_,Optional,_,A,Default} <- lists:keysort(1, Fields)],
     protobuffs_io:format(FileRef, "-record(~s, {~n    ", [string:to_lower(Name)]),
-    WriteFields0 = generate_field_definitions(OutFields),
+    WriteFields0 = protobuffs_compile_lib:generate_field_definitions(OutFields),
     WriteFields = case Extends of
 		      disallowed -> WriteFields0;
 		      _ ->
@@ -238,3 +217,7 @@ parse_imports([Head | Tail], Path, Acc) ->
 -spec parse_string(string()) -> {'error', _} | {'ok', _}.
 parse_string(String) ->
     protobuffs_parser:parse(String).
+
+
+compile_forms(Forms, Options) ->
+    compile:forms(Forms, [return] ++ Options).

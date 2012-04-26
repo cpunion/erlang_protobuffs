@@ -27,7 +27,7 @@
 
 -module(protobuffs_io).
 
--export([open/2,path_open/3,close/1,format/3,request/1,compile_forms/2,write_file/2]).
+-export([open/2,path_open/3,close/1,format/3,request/1,write_file/2]).
 
 open(File, Options) ->
     file:open(File,Options).
@@ -43,9 +43,6 @@ format(FileRef, FormatString, WriteFields) ->
 
 request(InFile) ->
     io:request(InFile,{get_until,prompt,protobuffs_scanner,token,[1]}).
-
-compile_forms(Forms, Options) ->
-    compile:forms(Forms, [return] ++ Options).
 
 write_file(File, Bytes) ->
     file:write_file(File,Bytes).
