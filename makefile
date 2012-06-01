@@ -43,7 +43,7 @@ dialyzer: compile
 	@echo Use "'make build_plt'" to build PLT prior to using this target.
 	@echo
 	@sleep 1
-	dialyzer -Wno_return -Wunmatched_returns -Werror_handling -Wrace_conditions --plt $(COMBO_PLT) ebin | \
+	dialyzer -Wno_return -Wunmatched_returns -Werror_handling -Wrace_conditions --plt $(COMBO_PLT) ebin deps/getopt/ebin | \
 		fgrep -v -f dialyzer.ignore-warnings
 
 cleanplt:
