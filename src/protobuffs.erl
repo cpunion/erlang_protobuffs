@@ -32,9 +32,6 @@
 %% Used by generated *_pb file. Not intended to used by User
 -export([next_field_num/1]).
 
-%% Will be removed from export, only intended for internal usage
--deprecated([{read_field_num_and_wire_type,1,next_version}]).
--deprecated([{decode_value,3,next_version}]).
 -export([read_field_num_and_wire_type/1, decode_value/3]).
 
 -define(TYPE_VARINT, 0).
