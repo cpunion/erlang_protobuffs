@@ -1,0 +1,5 @@
+package mixedCase;
+
+message MixedCase {
+	required string MixedCaseFieldName = 1;
+}

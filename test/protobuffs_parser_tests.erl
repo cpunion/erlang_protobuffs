@@ -97,6 +97,13 @@ nested_message_test_() ->
 		  {message, "Nested", []}]}],
     parse_test(String, Expected).
 
+mixed_case_test_() ->
+    String = "message Test { optional string mixedCase = 42; }",
+    Expected = [{message, "Test", 
+		 [{42, optional, "string", "mixedCase", none}]
+		}],
+    parse_test(String, Expected).
+
 parse_test(String, Expected) ->
     {ok, Result, 1} = protobuffs_scanner:string(String),
     Parsed = protobuffs_parser:parse(Result),

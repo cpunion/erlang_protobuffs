@@ -192,7 +192,7 @@ filter_export_decode_encode({Name, _, _}, Acc) ->
 
 -spec filter_record(any(),[tuple()],integer(),string(),attribute_tuple()) -> attribute_tuple().
 filter_record(Extends,Fields,L,Name,{attribute, L, record, {pikachu, [FieldTemplate|Extend]}}) ->
-    OutFields = [string:to_lower(A) || {_, _, _, A, _} <- lists:keysort(1, Fields)],		   
+    OutFields = [A || {_, _, _, A, _} <- lists:keysort(1, Fields)],		   
     ExtendField = case Extends of
 		      disallowed -> [];
 		      _ -> Extend
@@ -347,7 +347,7 @@ filter_iolist_clause({MsgName, Fields, _Extends}, {clause,_,Args,Guards,[{cons,_
 
     Cons = lists:foldl(fun({FNum,Tag,SType,SName,Default},Acc) ->
 			       R1 = replace_atom(Call,pikachu,atomize(MsgName)),
-			       R2 = replace_atom(R1,abc,atomize(SName)),
+			       R2 = replace_atom(R1,abc,list_to_atom(SName)),
 			       R3 = replace_atom(R2,{integer,L,1},{integer,L,FNum}),
 			       R4 = if 
 					is_atom(Default) -> replace_atom(R3,none,Default);
