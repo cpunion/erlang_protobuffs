@@ -57,17 +57,18 @@ scan_string(String,BaseName) ->
 		       ok | {error, _}.
 scan_file(ProtoFile,Options) when is_list(ProtoFile) ->
     Basename = filename:basename(ProtoFile, ".proto") ++ "_pb",
-    {ok,String} = parse_file(ProtoFile),
-    scan_string(String,Basename,Options);
+    {ok,TokenizedString} = parse_file(ProtoFile),
+    generate_output(TokenizedString,Basename,Options);
 scan_file(ProtoFile,Options) when is_atom(ProtoFile) ->
     Basename = atom_to_list(ProtoFile) ++ "_pb",
-    {ok,String} = parse_file(atom_to_list(ProtoFile) ++ ".proto"),
-    scan_string(String,Basename,Options).
+    {ok,TokenizedString} = parse_file(atom_to_list(ProtoFile) ++ ".proto"),
+    generate_output(TokenizedString,Basename,Options).
 
 -spec scan_string(String :: string(), Basename :: string(), Options :: list()) ->
 			 ok | {error, _}. 
 scan_string(String,Basename,Options) ->
-    generate_output(Options, Basename, String, fun output/4).
+    {ok,TokenizedString,_} = protobuffs_scanner:string(String),
+    generate_output(TokenizedString, Basename, Options).
 
 %%--------------------------------------------------------------------
 %% @doc Generats a source .erl file and header file .hrl
@@ -91,8 +92,8 @@ generate_source(ProtoFile,Options) when is_list (ProtoFile) ->
     generate_output(Options, Basename, String, fun output_source/4);
 generate_source(ProtoFile,Options) when is_atom (ProtoFile) ->
     Basename = atom_to_list(ProtoFile) ++ "_pb",
-    {ok,String} = parse_file(ProtoFile),
-    generate_output(Options, Basename, String, fun output_source/4).
+    {ok,TokenizedString} = parse_file(ProtoFile),
+    generate_output(Options, Basename, TokenizedString, fun output_source/4).
 
 %% @hidden
 output(Basename, Messages, Enums, Options) ->
@@ -139,8 +140,11 @@ parse_file(InFile,Acc) ->
             Acc
     end.
 
-generate_output(Options, Basename, String, OutputFunction) ->
-    {ok, FirstParsed} = parse_string(String),
+generate_output(TokenizedString,Basename,Options) ->
+    generate_output(Options, Basename, TokenizedString, fun output/4).
+
+generate_output(Options, Basename, TokenizedString, OutputFunction) ->
+    {ok, FirstParsed} = parse_string(TokenizedString),
     ImportPaths = ["./", "src/"
 		   | proplists:get_value(imports_dir, Options, [])],
     Parsed = parse_imports(FirstParsed,
