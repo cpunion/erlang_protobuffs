@@ -517,7 +517,7 @@ replace_atom(Other, _Find, _Replace) ->
 set_line_number(L,{N,_}) ->
     {N,L};
 set_line_number(L,{N,_,R}) when is_list(R) ->
-    List = lists:map(fun(Element) -> set_line_number(L,Element) end, R),
+    List = [set_line_number(L, Element) || Element <- R],
     {N,L,List};
 set_line_number(L,{N,_,R}) when is_tuple(R) ->
     Tuple = set_line_number(L,R),
@@ -613,8 +613,7 @@ collect_full_messages([{extend, Name, ExtendedFields} | Tail], Collected) ->
 		    (Id,From,To) -> From =< Id andalso Id =< To
 		 end,
 
-    ExtendedFieldsOut = lists:append(FieldsOut,
-				     lists:foldl(
+    ExtendedFieldsOut = FieldsOut ++ lists:foldl(
 				       fun ({Id, _, _, FieldName, _} = Input, 
 					    TmpAcc) ->
 					       case lists:any(
@@ -637,8 +636,7 @@ collect_full_messages([{extend, Name, ExtendedFields} | Tail], Collected) ->
 						       throw(out_of_range)
 					       end;
 					   (_, TmpAcc) -> TmpAcc
-				       end, [], ExtendedFields)
-				    ),
+				       end, [], ExtendedFields),
     NewExtends = ExtendFields ++ ExtendedFieldsOut,
     NewCollected = Collected#collected{msg=lists:keyreplace(ListName,1,CollectedMsg,{ListName,FieldsOut,NewExtends})},
     collect_full_messages(Tail, NewCollected);
@@ -663,12 +661,7 @@ is_enum_type(Type, [TypePath|Paths], Enums) ->
 	    is_enum_type(Type, Paths, Enums)
     end.
 is_enum_type(Type, Enums) ->
-    case lists:keysearch(Type,2,Enums) of
-	false ->
-	    false;
-	{value,_} ->
-	    true
-    end.
+    lists:keymember(Type, 2, Enums).
 
 resolve_types (Data, Enums) -> 
     resolve_types (Data, Data, Enums, []).

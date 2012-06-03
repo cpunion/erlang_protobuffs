@@ -205,7 +205,7 @@ parse_imports([{import, File} = Head | Tail], Path, Acc) ->
 	    ok = file:close(F),
 	    {ok,String} = parse_file(Fullname),
 	    {ok,FirstParsed} = parse_string(String),
-	    Parsed = lists:append(FirstParsed, Tail),
+	    Parsed = FirstParsed ++ Tail,
 	    parse_imports(Parsed, Path, [Head | Acc]);
 	{error, Error} ->
 	    error_logger:error_report(["Could not do import",
