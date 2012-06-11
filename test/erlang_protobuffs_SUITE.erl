@@ -259,7 +259,10 @@ generate_source(DataDir, PrivDir, Filename) ->
 	       {output_include_dir,PrivDir}],
     try
 	test_server:format("Generating source file ~p",[Path]),
-	protobuffs_compile:generate_source(Path, Options)
+	ok = protobuffs_compile:generate_source(Path, Options),
+	SourceFile = filename:join([PrivDir,filename:basename(Filename, ".proto")++"_pb.erl"]),
+	test_server:format("Compiling source file ~p",[SourceFile]),
+	{ok,_} = compile:file(SourceFile)
     catch out_of_range -> 
 	    ok
     end.
