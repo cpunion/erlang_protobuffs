@@ -531,3 +531,5 @@ proper_protobuffs_mixedCase() ->
             Decoded = mixedCase_pb:decode_mixedcase(mixedCase_pb:encode_mixedcase(Input)),
             compare_messages(Input, Decoded)
         end).
+
+    

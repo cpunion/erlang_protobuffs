@@ -32,6 +32,7 @@ g_element -> g_var integer g_var integer ';' 			: {'$1', unwrap('$2'), unwrap('$
 g_element -> g_var integer g_var g_var ';' 			: {'$1', unwrap('$2'), '$4'}.
 g_element -> g_var g_var '=' g_value ';'			: {'$1', '$2', '$4'}.
 g_element -> g_message						: '$1'.
+g_element -> g_message ';'					: '$1'.
 
 g_var -> var 							: unwrap('$1').
 

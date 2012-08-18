@@ -138,9 +138,9 @@ test_proto_files(Config) ->
     DataDir = (?config(data_dir, Config)),
     NumTests = (?config(num_tests, Config)),
     PrivDir = (?config(priv_dir, Config)),
+    test_server:format("~n===Out ~p===~n", [?config(priv_dir,Config)]),
     ProtoFiles = filelib:wildcard(filename:join([DataDir, "proto", "*.proto"])),
     ScanProtoFiles = [Filename || Filename <- ProtoFiles , scan_file(DataDir, PrivDir, Filename)],
-    test_server:format("~n===Out ~p===~n", [?config(priv_dir,Config)]),
     Tests = lists:map(fun(Filename) -> 
 			      list_to_atom("proper_protobuffs_" ++ 
 					       filename:basename(Filename,".proto")) 
@@ -227,6 +227,7 @@ run_test(NumTests, Testname, Acc) ->
     end.
 
 scan_file(DataDir, PrivDir, Filename) ->
+    test_server:format("~n===Scan file ~p===~n", [Filename]),
     Path = filename:absname(Filename),
     Options = [{imports_dir,
 		[filename:join([DataDir, "proto"]),
