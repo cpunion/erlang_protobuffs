@@ -5,7 +5,7 @@ message EnumMsg {
     value3 = -1;
     value4 = -2147483647;
     value5 = 2147483648;
-  }
+  };
 
   optional Values value = 1;
 } 

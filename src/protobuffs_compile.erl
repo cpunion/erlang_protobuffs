@@ -125,18 +125,18 @@ output_source (Basename, Messages, Enums, Options) ->
 %% @hidden
 parse_file(FileName) ->
     {ok, InFile} = protobuffs_io:open(FileName, [read]),
-    String = parse_file(InFile,[]),
+    String = parse_file(InFile,[],1),
     ok = file:close(InFile),
     {ok,String}.
 
 %% @hidden
-parse_file(InFile,Acc) ->
-    case protobuffs_io:request(InFile) of
-        {ok,Token,_EndLine} ->
-            parse_file(InFile,Acc ++ [Token]);
+parse_file(InFile,Acc,Line) ->
+    case protobuffs_io:request(InFile,Line) of
+        {ok,Token,EndLine} ->
+            parse_file(InFile,Acc ++ [Token],EndLine);
         {error,token} ->
             exit(scanning_error);    
-        {eof,_} ->
+        {eof,EndLine} ->
             Acc
     end.
 
@@ -144,18 +144,23 @@ generate_output(TokenizedString,Basename,Options) ->
     generate_output(Options, Basename, TokenizedString, fun output/4).
 
 generate_output(Options, Basename, TokenizedString, OutputFunction) ->
-    {ok, FirstParsed} = parse_string(TokenizedString),
-    ImportPaths = ["./", "src/"
-		   | proplists:get_value(imports_dir, Options, [])],
-    Parsed = parse_imports(FirstParsed,
-                           ImportPaths),
-    Collected = protobuffs_compile_lib:collect_full_messages(Parsed),
-    Messages = protobuffs_compile_lib:resolve_types(Collected#collected.msg,
-                                                    Collected#collected.enum),
-    OutputFunction(Basename, 
-		   Messages, 
-		   Collected#collected.enum,
-                   Options).
+    case parse_string(TokenizedString) of
+        {ok, FirstParsed} ->
+            ImportPaths = ["./", "src/"
+                           | proplists:get_value(imports_dir, Options, [])],
+            Parsed = parse_imports(FirstParsed,
+                                   ImportPaths),
+            Collected = protobuffs_compile_lib:collect_full_messages(Parsed),
+            Messages = protobuffs_compile_lib:resolve_types(Collected#collected.msg,
+                                                            Collected#collected.enum),
+            OutputFunction(Basename, 
+                           Messages, 
+                           Collected#collected.enum,
+                           Options);
+        {error,{Line_number, Module, Message}} ->
+            error_logger:error_report({Line_number, Module, Message,TokenizedString}),
+            exit(1)
+    end.
 
 create_forms(Basename, Messages, Enums) ->
     {_,Binary,_} = code:get_object_code(pokemon_pb),
