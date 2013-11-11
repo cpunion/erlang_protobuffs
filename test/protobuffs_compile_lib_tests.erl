@@ -821,10 +821,20 @@ test_function_is_scalar_type() ->
 
 test_function_generate_field_definitions() ->
     [?_assertEqual([],protobuffs_compile_lib:generate_field_definitions([])),
-     ?_assertEqual(["Name = erlang:error({required, Name})"],
-		   protobuffs_compile_lib:generate_field_definitions([{"Name", required, dummy}])),
-     ?_assertEqual(["Name"],protobuffs_compile_lib:generate_field_definitions([{"Name", dummy, none}])),
-     ?_assertEqual(["Name = \"Default\""],protobuffs_compile_lib:generate_field_definitions([{"Name", dummy, "Default"}]))].
+     ?_assertEqual(["Name = erlang:error({required, Name}) :: integer()"],
+        protobuffs_compile_lib:generate_field_definitions([{"Name", "uint32", required, dummy}])),
+     ?_assertEqual(["Name = erlang:error({required, Name}) :: string()"],
+        protobuffs_compile_lib:generate_field_definitions([{"Name", "string", required, dummy}])),
+     ?_assertEqual(["Name = erlang:error({required, Name}) :: #usertype{}"],
+        protobuffs_compile_lib:generate_field_definitions([{"Name", "UserType", required, dummy}])),
+     ?_assertEqual(["Name :: integer() | undefined"],
+        protobuffs_compile_lib:generate_field_definitions([{"Name", "int32", optional, none}])),
+     ?_assertEqual(["Name = dummy :: integer() | undefined"],
+        protobuffs_compile_lib:generate_field_definitions([{"Name", "sint32", optional, dummy}])),
+     ?_assertEqual(["Name = dummy :: [#usertype{}]"],
+        protobuffs_compile_lib:generate_field_definitions([{"Name", "UserType", repeated, dummy}])),
+     ?_assertEqual(["Name :: integer()"],protobuffs_compile_lib:generate_field_definitions([{"Name", "int64", dummy, none}])),
+     ?_assertEqual(["Name = \"Default\" :: integer()"],protobuffs_compile_lib:generate_field_definitions([{"Name", "fixed32", dummy, "Default"}]))].
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%

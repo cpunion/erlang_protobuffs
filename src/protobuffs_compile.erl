@@ -182,7 +182,7 @@ create_header_file(Basename, Messages, Options) ->
     ok = protobuffs_io:close(FileRef).
 
 write_to_file(FileRef, Name, Fields, Extends) ->
-    OutFields = [{string:to_lower(A),Optional,Default} || {_,Optional,_,A,Default} <- lists:keysort(1, Fields)],
+    OutFields = [{string:to_lower(A),Type,Optional,Default} || {_,Optional,Type,A,Default} <- lists:keysort(1, Fields)],
     protobuffs_io:format(FileRef, "-record(~s, {~n    ", [string:to_lower(Name)]),
     WriteFields0 = protobuffs_compile_lib:generate_field_definitions(OutFields),
     WriteFields = case Extends of

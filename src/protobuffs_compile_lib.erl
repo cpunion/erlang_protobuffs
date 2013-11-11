@@ -766,12 +766,55 @@ generate_field_definitions(Fields) ->
 
 generate_field_definitions([], Acc) ->
     lists:reverse(Acc);
-generate_field_definitions([{Name, required, _} | Tail], Acc) ->
-    Head = lists:flatten(io_lib:format("~s = erlang:error({required, ~s})", [Name, Name])),
+generate_field_definitions([{Name, Type, required, _} | Tail], Acc) ->
+	TypeSpec = generate_field_type(Type, required),
+    Head = lists:flatten(io_lib:format("~s = erlang:error({required, ~s})~s", [Name, Name, TypeSpec])),
     generate_field_definitions(Tail, [Head | Acc]);
-generate_field_definitions([{Name, _, none} | Tail], Acc) ->
-    Head = lists:flatten(io_lib:format("~s", [Name])),
+generate_field_definitions([{Name, Type, Optional, none} | Tail], Acc) ->
+	TypeSpec = generate_field_type(Type, Optional),
+    Head = lists:flatten(io_lib:format("~s~s", [Name, TypeSpec])),
     generate_field_definitions(Tail, [Head | Acc]);
-generate_field_definitions([{Name, _, Default} | Tail], Acc) ->
-    Head = lists:flatten(io_lib:format("~s = ~p", [Name, Default])),
+generate_field_definitions([{Name, Type, Optional, Default} | Tail], Acc) ->
+	TypeSpec = generate_field_type(Type, Optional),
+    Head = lists:flatten(io_lib:format("~s = ~p~s", [Name, Default, TypeSpec])),
     generate_field_definitions(Tail, [Head | Acc]).
+
+generate_field_type(Type, repeated) ->
+	" :: [" ++ generate_field_type(Type) ++ "]";
+generate_field_type(Type, optional) ->
+	generate_field_type(Type, undefined) ++ " | undefined";
+generate_field_type(Type, _) ->
+	" :: " ++ generate_field_type(Type).
+
+generate_field_type("uint32") ->
+	"integer()";
+generate_field_type("int32") ->
+	"integer()";
+generate_field_type("sint32") ->
+	"integer()";
+generate_field_type("fixed32") ->
+	"integer()";
+generate_field_type("sfixed32") ->
+	"integer()";
+generate_field_type("uint64") ->
+	"integer()";
+generate_field_type("int64") ->
+	"integer()";
+generate_field_type("sint64") ->
+	"integer()";
+generate_field_type("fixed64") ->
+	"integer()";
+generate_field_type("sfixed64") ->
+	"integer()";
+generate_field_type("string") ->
+	"string()";
+generate_field_type("bytes") ->
+	"binary()";
+generate_field_type("float") ->
+	"float()";
+generate_field_type("double") ->
+	"float()";
+generate_field_type("bool") ->
+	"boolean()";
+generate_field_type(Type) ->
+	io_lib:format("#~s{}", [string:to_lower(Type)]).
