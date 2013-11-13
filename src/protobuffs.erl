@@ -58,6 +58,7 @@
 	     Value :: any(),
 	     Type :: field_type()) -> 
 		    binary().
+
 encode(FieldID, Value, Type) ->
     iolist_to_binary(encode_internal(FieldID, Value, Type)).
 
@@ -134,7 +135,7 @@ encode_internal(FieldID, Integer, sfixed64) when Integer >= -16#8000000000000000
 						 Integer =< 16#7fffffffffffffff ->
     [encode_field_tag(FieldID, ?TYPE_64BIT), <<Integer:64/little-integer>>];
 encode_internal(FieldID, String, string) when is_list(String) ->
-    encode_internal(FieldID, unicode:characters_to_binary(String), string);
+    encode_internal(FieldID, list_to_binary(String), string);
 encode_internal(FieldID, String, string) when is_binary(String) ->
     encode_internal(FieldID, String, bytes);
 encode_internal(FieldID, String, bytes) when is_list(String) ->
@@ -296,7 +297,7 @@ decode_value(Bytes, ?TYPE_VARINT, ExpectedType) ->
 decode_value(Bytes, ?TYPE_STRING, string) ->
     {Length, Rest} = decode_varint(Bytes),
     {Value,Rest1} = split_binary(Rest, Length),
-    {[C || <<C/utf8>> <= Value],Rest1};
+    {binary_to_list(Value),Rest1};
 decode_value(Bytes, ?TYPE_STRING, bytes) ->
     {Length, Rest} = decode_varint(Bytes),
     split_binary(Rest, Length);
